@@ -1,0 +1,32 @@
+const ALLOWED_PREFIXES = ['dists/', 'pool/', 'static/'];
+const ALLOWED_EXACT = ['pubkey.asc', 'scripts/install.sh'];
+
+function isPathSafe(p: string): boolean {
+    if (!p) return false;
+    if (p.startsWith('/')) return false;
+    if (p.includes('..')) return false;
+    if (p.includes('\0')) return false;
+    return true;
+}
+
+export function validateUploadPath(
+    path: string
+): { ok: true; key: string } | { ok: false; error: string } {
+    if (!isPathSafe(path)) {
+        return { ok: false, error: 'Path is unsafe (traversal/absolute/null)' };
+    }
+    if (ALLOWED_EXACT.includes(path)) {
+        return { ok: true, key: path };
+    }
+    for (const prefix of ALLOWED_PREFIXES) {
+        if (path.startsWith(prefix)) {
+            if (path === prefix) {
+                return { ok: true, key: path };
+            }
+            if (path.length > prefix.length) {
+                return { ok: true, key: path };
+            }
+        }
+    }
+    return { ok: false, error: `Path not in whitelist. Allowed: ${[...ALLOWED_PREFIXES, ...ALLOWED_EXACT].join(', ')}` };
+}
