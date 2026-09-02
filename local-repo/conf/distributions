@@ -1,0 +1,16 @@
+Origin: cloud-apt
+Label: Personal APT Repository
+SignWith: __GPG_EMAIL__   # ← gen-key.sh 时填入实际邮箱
+
+Codename: kali-rolling
+Suite: kali-rolling
+Architectures: amd64 arm64
+Components: main
+Description: Kali Rolling builds
+
+# --- 扩展位: 多发行版时取消注释 ---
+# Codename: bookworm
+# Suite: stable
+# Architectures: amd64 arm64
+# Components: main
+# Description: Debian Bookworm builds
