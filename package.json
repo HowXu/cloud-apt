@@ -8,7 +8,10 @@
   ],
   "scripts": {
     "dev": "npm --workspace apt-worker run dev",
-    "build": "npm --workspace apt-client run build && npm --workspace apt-worker run build",
+    "build": "npm --workspace apt-client run build && npm run build:copy && npm --workspace apt-worker run build",
+    "build:copy": "rm -rf apt-worker/dist && mkdir -p apt-worker/dist && cp -r apt-client/dist/* apt-worker/dist/",
+    "build:client": "npm --workspace apt-client run build",
+    "build:worker": "npm --workspace apt-worker run build",
     "deploy": "npm --workspace apt-worker run deploy",
     "test": "npm --workspace apt-worker test",
     "typecheck": "npm --workspace apt-worker run typecheck && npm --workspace apt-client run typecheck"
