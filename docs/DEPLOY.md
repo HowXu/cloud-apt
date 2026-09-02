@@ -117,3 +117,25 @@ sudo apt update && sudo apt install myapp
 
 - 确认 wrangler.toml 的 `[assets]` 配置存在
 - 确认 build 流程执行了 (`apt-worker/dist/` 有文件)
+
+## 附录: 轮换 ADMIN_PUSH_TOKEN (泄露时)
+
+如果怀疑 `ADMIN_PUSH_TOKEN` 泄露 (例如 push 日志被截获、CI runner 被入侵、token 误提交到公开仓库), 立即轮换:
+
+1. **Cloudflare Dashboard**: Workers & Pages → 选中 `cloud-apt-worker` → Settings → Variables and Secrets
+2. 找到 `ADMIN_PUSH_TOKEN` 条目 → 点击 "Edit" → 修改为新值 → "Save"
+3. Dashboard 自动触发重新部署, 几秒内生效, **旧 token 立即失效**
+4. **本地**: 更新 `local-repo/config.env` 中的 `ADMIN_PUSH_TOKEN=新值`
+5. 重新执行 `push-key.sh` 和 `build-and-push.sh`, 让本地重新认证
+
+> **R2 对象不受影响** — token 只是传输层鉴权, 不参与 R2 状态。R2 中的 `.deb`、`Packages`、`Release` 文件会保留。GPG 私钥如果未泄露则不需要重生成, 重生成会导致所有客户端需要重新下载公钥 (`apt-key` 提示未签名直到下次 `apt update`)。
+
+## 附录: 安全建议清单 (运营期)
+
+| 项 | 频率 | 说明 |
+|---|---|---|
+| 检查 Cloudflare Access 日志 | 每周 | Dashboard → Workers → Logs → 过滤 `/api/upload/*` 异常 IP |
+| 轮换 ADMIN_PUSH_TOKEN | 每 90 天 | 同上流程 |
+| 备份 reprepro 仓库 + GPG 私钥 | 每周 | 离线加密备份 (GPG 私钥本身已 AES256) |
+| 检查 R2 存储用量 | 每月 | Dashboard → R2 → `cloud-apt` → Metrics, 异常增长 = 异常写入 |
+| 更新 Worker 依赖 | 每月 | `npm outdated --workspace apt-worker` |

@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm --workspace apt-worker run dev",
     "build": "npm --workspace apt-client run build && npm run build:copy && npm --workspace apt-worker run build",
-    "build:copy": "rm -rf apt-worker/dist && mkdir -p apt-worker/dist && cp -r apt-client/dist/* apt-worker/dist/",
+    "build:copy": "if [ -z \"$(ls -A apt-client/dist 2>/dev/null)\" ]; then echo 'ERROR: apt-client/dist is empty or missing — run npm --workspace apt-client run build first' >&2; exit 1; fi && rm -rf apt-worker/dist && mkdir -p apt-worker/dist && cp -r apt-client/dist/. apt-worker/dist/",
     "build:client": "npm --workspace apt-client run build",
     "build:worker": "npm --workspace apt-worker run build",
     "deploy": "npm --workspace apt-worker run deploy",
