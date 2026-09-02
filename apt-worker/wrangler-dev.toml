@@ -1,3 +1,9 @@
+# ============================================================
+# ⚠  THIS IS A DEV CONFIG — DO NOT DEPLOY TO PRODUCTION  ⚠
+# Production secrets are set via `wrangler secret put ADMIN_PUSH_TOKEN`.
+# This file's [vars] section is for `wrangler dev` local testing only.
+# ============================================================
+
 name = "cloud-apt-worker-dev"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
