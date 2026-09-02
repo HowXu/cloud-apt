@@ -10,7 +10,7 @@
 
 只需一个 Cloudflare Worker，即可部署带浏览界面的 APT 私有仓库。支持 reprepro 本地 GPG 签名 + curl 推送，apt 客户端 (`apt update && apt install`) 直接可用。
 
-参考 [cloud-maven](https://github.com/...) 的架构模式 (Worker + Vue SPA + R2)。
+参考 [cloud-maven](https://github.com/HowXu/cloud-maven) 的架构模式 (Worker + Vue SPA + R2)。
 
 ## 功能特性
 
@@ -23,7 +23,14 @@
 
 ## 项目展示
 
-(TODO: 部署后截图)
+部署后访问 `https://<your-worker-domain>/` 可见:
+
+- 首页: suite 列表 + 搜索框
+- 包列表: `/browse?suite=kali-rolling&arch=amd64`
+- 包详情: `/browse/<package-name>`
+- 搜索: `/search?q=<query>`
+
+(TODO: 截图)
 
 ## 技术栈
 

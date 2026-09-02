@@ -10,7 +10,7 @@
 
 Deploy a private APT repository with a browse UI using a single Cloudflare Worker. Supports local GPG signing via reprepro and curl-based push; apt clients (`apt update && apt install`) work out of the box.
 
-Architectural pattern inspired by [cloud-maven](https://github.com/...) (Worker + Vue SPA + R2).
+Architectural pattern inspired by [cloud-maven](https://github.com/HowXu/cloud-maven) (Worker + Vue SPA + R2).
 
 ## Features
 
@@ -23,7 +23,14 @@ Architectural pattern inspired by [cloud-maven](https://github.com/...) (Worker 
 
 ## Showcase
 
-(TODO: Screenshots after deployment)
+After deployment, visit `https://<your-worker-domain>/`:
+
+- **Home**: suite list + search box
+- **Package list**: `/browse?suite=kali-rolling&arch=amd64`
+- **Package details**: `/browse/<package-name>`
+- **Search**: `/search?q=<query>`
+
+(TODO: Screenshots)
 
 ## Tech Stack
 
