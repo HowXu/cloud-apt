@@ -11,6 +11,7 @@ const mockR2 = (files: Record<string, string>) => ({
         );
         const buf = await compressed.arrayBuffer();
         return {
+            httpEtag: `etag-${key}`,
             body: new ReadableStream({
                 start(c) {
                     c.enqueue(new Uint8Array(buf));
@@ -38,13 +39,18 @@ Description: Bar with foo in name
 `;
 
 describe('handleIndex', () => {
-    it('returns packages from cache', async () => {
+    it('returns packages from cache when etag matches', async () => {
         const env: any = {
-            APT_BUCKET: mockR2({}),
+            APT_BUCKET: mockR2({
+                'dists/kali-rolling/main/binary-amd64/Packages.gz': samplePackages,
+            }),
             APT_KV: {
-                get: vi.fn(async () => JSON.stringify([
-                    { Package: 'cached', Version: '1.0', Architecture: 'amd64', Size: 1, Filename: 'x' },
-                ])),
+                get: vi.fn(async () => JSON.stringify({
+                    etag: 'etag-dists/kali-rolling/main/binary-amd64/Packages.gz',
+                    entries: [
+                        { Package: 'cached', Version: '1.0', Architecture: 'amd64', Size: 1, Filename: 'x' },
+                    ],
+                })),
                 put: vi.fn(),
                 delete: vi.fn(),
             },

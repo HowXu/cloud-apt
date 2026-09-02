@@ -6,20 +6,23 @@ const ARCHS = ['amd64', 'arm64'] as const;
 type Arch = typeof ARCHS[number];
 
 async function loadIndex(env: Bindings, suite: string, arch: Arch): Promise<PackageEntry[]> {
-    const cached = await getCachedIndex(env, suite, arch);
-    if (cached) return cached;
-
     const bucket = env.APT_BUCKET;
     if (!bucket) return [];
 
     const obj = await bucket.get(`dists/${suite}/main/binary-${arch}/Packages.gz`);
     if (!obj) return [];
 
+    const etag = obj.httpEtag;
+    const cached = await getCachedIndex(env, suite, arch);
+    if (cached && cached.etag === etag) {
+        return cached.entries;
+    }
+
     // Decompress gzip
     const stream = new Response(obj.body).body!.pipeThrough(new DecompressionStream('gzip'));
     const text = await new Response(stream).text();
     const entries = parsePackages(text);
-    await setCachedIndex(env, suite, arch, entries);
+    await setCachedIndex(env, suite, arch, { etag, entries });
     return entries;
 }
 
