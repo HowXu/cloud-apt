@@ -1,0 +1,27 @@
+{
+  "name": "cloud-apt-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler-dev.toml",
+    "build": "tsc --noEmit",
+    "build:worker": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.70",
+    "@cloudflare/workers-types": "^4.20250906.0",
+    "@vitest/runner": "^3.2.0",
+    "@vitest/snapshot": "^3.2.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.0",
+    "wrangler": "^4.20.0"
+  }
+}

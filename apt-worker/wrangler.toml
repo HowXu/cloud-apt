@@ -1,0 +1,22 @@
+name = "cloud-apt-worker"
+main = "src/index.ts"
+compatibility_date = "2026-05-29"
+
+[assets]
+binding = "ASSETS"
+directory = "./dist"
+run_worker_first = true
+
+[observability.logs]
+enabled = true
+
+# 用户填或注释掉让 Cloudflare Dashboard 自动创建
+[[kv_namespaces]]
+binding = "APT_KV"
+#id = "input your value and delete # or use cloudflare dashboard"
+
+[[r2_buckets]]
+binding = "APT_BUCKET"
+#bucket_name = "input your value and delete # or use cloudflare dashboard"
+
+# Secrets: ADMIN_PUSH_TOKEN (用 wrangler secret put 设置)
