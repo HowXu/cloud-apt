@@ -19,9 +19,12 @@ export function validateUploadPath(
         return { ok: true, key: path };
     }
     for (const prefix of ALLOWED_PREFIXES) {
+        if (path === prefix.replace(/\/$/, '')) {
+            return { ok: false, error: 'Empty upload path' };
+        }
         if (path.startsWith(prefix)) {
             if (path === prefix) {
-                return { ok: true, key: path };
+                return { ok: false, error: 'Empty upload path' };
             }
             if (path.length > prefix.length) {
                 return { ok: true, key: path };

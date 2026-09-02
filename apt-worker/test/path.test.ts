@@ -40,10 +40,27 @@ describe('validateUploadPath', () => {
         expect(validateUploadPath('').ok).toBe(false);
     });
 
-    it('rejects dists/ but no actual content', () => {
-        expect(validateUploadPath('dists/').ok).toBe(true);  // allow directory-style
-        if (validateUploadPath('dists/').ok) {
-            expect(validateUploadPath('dists/').ok && (validateUploadPath('dists/') as any).key).toBe('dists/');
-        }
+    it('rejects directory-style dists/', () => {
+        const r = validateUploadPath('dists/');
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe('Empty upload path');
+    });
+
+    it('rejects bare "dists" without trailing slash', () => {
+        const r = validateUploadPath('dists');
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe('Empty upload path');
+    });
+
+    it('rejects bare "pool" without trailing slash', () => {
+        const r = validateUploadPath('pool');
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe('Empty upload path');
+    });
+
+    it('rejects directory-style pool/', () => {
+        const r = validateUploadPath('pool/');
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe('Empty upload path');
     });
 });
