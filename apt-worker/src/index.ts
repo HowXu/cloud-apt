@@ -32,15 +32,24 @@ app.get('/install.sh', (c) => proxyR2(c.env, 'scripts/install.sh', 'text/plain; 
 
 app.get('/api/status/health', (c) => c.json({ status: 'ok' }));
 
-app.get('*', (c) => {
+app.get('*', async (c) => {
     const url = new URL(c.req.url);
     if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/dists/') ||
-        url.pathname.startsWith('/pool/') || url.pathname === '/pubkey.asc' ||
-        url.pathname === '/install.sh') {
+        url.pathname.startsWith('/pool/')) {
         return c.notFound();
     }
     if (!c.env.ASSETS) return c.text('SPA assets not built', { status: 500 });
-    return c.env.ASSETS.fetch(c.req.raw);
+    const res = await c.env.ASSETS.fetch(c.req.raw);
+    const ct = res.headers.get('Content-Type') || '';
+    if (!ct.includes('text/html')) {
+        return res;
+    }
+    const h = new Headers(res.headers);
+    h.set('X-Content-Type-Options', 'nosniff');
+    h.set('Referrer-Policy', 'no-referrer');
+    h.set('X-Frame-Options', 'DENY');
+    h.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self';");
+    return new Response(res.body, { status: res.status, headers: h });
 });
 
 export default app;
