@@ -76,4 +76,37 @@ describe('handleUpload', () => {
         const r = await handleUpload(req, env());
         expect(r.status).toBe(405);
     });
+
+    it('400 for invalid Content-Type on pool/ (text/html)', async () => {
+        const e = env();
+        const req = new Request('https://x/api/upload/pool/main/x/x.html', {
+            method: 'PUT',
+            headers: { Authorization: 'Bearer secret', 'Content-Type': 'text/html' },
+            body: '<script>alert(1)</script>',
+        });
+        const r = await handleUpload(req, e);
+        expect(r.status).toBe(400);
+    });
+
+    it('400 for invalid Content-Type on dists/ (text/html)', async () => {
+        const e = env();
+        const req = new Request('https://x/api/upload/dists/kali-rolling/x.html', {
+            method: 'PUT',
+            headers: { Authorization: 'Bearer secret', 'Content-Type': 'text/html' },
+            body: '<script>alert(1)</script>',
+        });
+        const r = await handleUpload(req, e);
+        expect(r.status).toBe(400);
+    });
+
+    it('200 for valid Content-Type on pool/ (application/octet-stream)', async () => {
+        const e = env();
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb', {
+            method: 'PUT',
+            headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/octet-stream' },
+            body: 'deb-data',
+        });
+        const r = await handleUpload(req, e);
+        expect(r.status).toBe(200);
+    });
 });
