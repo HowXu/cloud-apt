@@ -15,16 +15,16 @@ export GPG_PASSPHRASE
 
 cd "$REPO_ROOT"
 
-# 1. 记下推送前的文件列表
-BEFORE=$(find dists pool -type f 2>/dev/null | sort || true)
+# 1. 记下推送前的文件列表 (path + checksum)
+BEFORE=$(find dists pool -type f -exec md5sum {} + 2>/dev/null | sort || true)
 
 # 2. reprepro 吸收 + 重新签名
 reprepro includedeb "$CODENAME" "$DEB"
 reprepro export "$CODENAME"
 
-# 3. diff 出新增/修改文件
-AFTER=$(find dists pool -type f 2>/dev/null | sort || true)
-TO_UPLOAD=$(comm -13 <(echo "$BEFORE") <(echo "$AFTER"))
+# 3. diff 出新增/修改文件 (path 与 checksum 任一变化即视为变化)
+AFTER=$(find dists pool -type f -exec md5sum {} + 2>/dev/null | sort || true)
+TO_UPLOAD=$(comm -13 <(echo "$BEFORE") <(echo "$AFTER") | awk '{print $2}')
 
 if [[ -z "$TO_UPLOAD" ]]; then
     echo "⚠ 没有需要上传的文件 (deb 可能未生效)"
