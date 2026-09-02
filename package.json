@@ -1,0 +1,16 @@
+{
+  "name": "cloud-apt",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apt-worker",
+    "apt-client"
+  ],
+  "scripts": {
+    "dev": "npm --workspace apt-worker run dev",
+    "build": "npm --workspace apt-client run build && npm --workspace apt-worker run build",
+    "deploy": "npm --workspace apt-worker run deploy",
+    "test": "npm --workspace apt-worker test",
+    "typecheck": "npm --workspace apt-worker run typecheck && npm --workspace apt-client run typecheck"
+  }
+}

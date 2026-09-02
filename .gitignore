@@ -1,0 +1,22 @@
+# Worker & client build
+node_modules/
+apt-worker/dist/
+apt-client/dist/
+.wrangler/
+
+# Tests
+coverage/
+
+# Local repo runtime data (部署到 ~/cloud-apt 后跟 git 无关)
+local-repo/conf/distributions.local
+local-repo/keys/
+
+# OS / Editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Secrets
+*.env
+.env
