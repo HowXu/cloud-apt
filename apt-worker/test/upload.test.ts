@@ -30,7 +30,9 @@ describe('handleUpload', () => {
         const r = await handleUpload(req, e);
         expect(r.status).toBe(200);
         expect((e.APT_BUCKET.put as any).mock.calls[0][0]).toBe('dists/kali-rolling/Release');
-        expect((e.APT_BUCKET.put as any).mock.calls[0][1]).toBe('release data');
+        const putArg = (e.APT_BUCKET.put as any).mock.calls[0][1];
+        expect(putArg instanceof ArrayBuffer).toBe(true);
+        expect(new TextDecoder().decode(putArg)).toBe('release data');
     });
 
     it('400 for unsafe path', async () => {

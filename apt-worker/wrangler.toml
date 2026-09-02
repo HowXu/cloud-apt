@@ -6,6 +6,7 @@ compatibility_date = "2026-05-29"
 binding = "ASSETS"
 directory = "./dist"
 run_worker_first = true
+not_found_handling = "single-page-application"
 
 [observability.logs]
 enabled = true

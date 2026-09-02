@@ -23,7 +23,7 @@ export async function handleUpload(req: Request, env: Bindings): Promise<Respons
     if (!bucket) return new Response('R2 not bound', { status: 500 });
 
     if (req.method === 'PUT') {
-        const body = await req.text();
+        const body = await req.arrayBuffer();
         await bucket.put(validated.key, body, {
             httpMetadata: { contentType: req.headers.get('Content-Type') || 'application/octet-stream' },
         });
