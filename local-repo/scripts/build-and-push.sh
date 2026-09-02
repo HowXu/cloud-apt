@@ -11,6 +11,12 @@ REPO_ROOT="${CLOUD_APT_ROOT:-$HOME/cloud-apt}"
 : "${ADMIN_PUSH_TOKEN:?需要设置 ADMIN_PUSH_TOKEN}"
 : "${GPG_PASSPHRASE:?需要设置 GPG_PASSPHRASE}"
 
+# Pass token via curl config file to keep it out of argv (visible to ps/e)
+_CURL_CONF=$(mktemp)
+chmod 600 "$_CURL_CONF"
+printf 'header = "Authorization: Bearer %s"\n' "$ADMIN_PUSH_TOKEN" > "$_CURL_CONF"
+trap 'shred -u "$_CURL_CONF" 2>/dev/null; rm -f "$_CURL_CONF"; unset ADMIN_PUSH_TOKEN' EXIT
+
 export GPG_PASSPHRASE
 
 cd "$REPO_ROOT"
@@ -42,7 +48,7 @@ for f in $TO_UPLOAD; do
     esac
     echo "  → PUT /api/upload/$f"
     if ! curl -fsS -X PUT "$WORKER_URL/api/upload/$f" \
-        -H "Authorization: Bearer $ADMIN_PUSH_TOKEN" \
+        -K "$_CURL_CONF" \
         -H "Content-Type: $CT" \
         --data-binary "@$f"; then
         echo "  ✗ 上传失败: $f" >&2
@@ -52,10 +58,11 @@ done
 
 # 5. 通知 Worker 失效缓存
 curl -fsS -X POST "$WORKER_URL/api/invalidate?suite=$CODENAME" \
-    -H "Authorization: Bearer $ADMIN_PUSH_TOKEN" || \
+    -K "$_CURL_CONF" || \
     echo "  ⚠ 缓存失效失败, 最多 5 分钟自动失效"
 
 unset GPG_PASSPHRASE
+unset ADMIN_PUSH_TOKEN
 
 PKG_NAME=$(basename "$DEB" | sed 's/_.*//')
 echo ""
