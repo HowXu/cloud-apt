@@ -17,6 +17,14 @@ DOMAIN="${WORKER_URL#https://}"
 DOMAIN="${DOMAIN#http://}"
 DOMAIN="${DOMAIN%%/*}"
 
+# 防止 WORKER_URL 中的 shell 元字符被 sed 解释 (I-6)
+if [[ ! "$DOMAIN" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "✗ WORKER_URL 解析出非法域名: '$DOMAIN'" >&2
+    echo "  期望格式: https://your-worker.workers.dev" >&2
+    echo "  域名仅允许字母、数字、点、连字符" >&2
+    exit 1
+fi
+
 TMP=$(mktemp)
 sed "s|__CLOUD_APT_DOMAIN__|$DOMAIN|g" "$SCRIPT_DIR/install.sh" > "$TMP"
 
