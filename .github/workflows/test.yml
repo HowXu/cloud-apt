@@ -16,6 +16,9 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
+      # vitest-pool-workers 加载 wrangler-dev.toml 的 [assets] directory=../apt-client/dist;
+      # 必须先 build, 否则 wrangler 解析失败. 用 --emptyOutDir 保证空目录不混入.
+      - run: npm run -w apt-client build -- --outDir ../apt-client/dist --emptyOutDir
       - run: npm run -w apt-worker test
       - run: npm run -w apt-worker typecheck
 
@@ -39,4 +42,5 @@ jobs:
           node-version: '22'
           cache: 'npm'
       - run: npm ci
+      - run: npm run -w apt-client build
       - run: cd apt-worker && npx wrangler deploy --dry-run --outdir=dist-test
