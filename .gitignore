@@ -11,11 +11,16 @@ coverage/
 # conf/distributions.template 是模板 (git 跟踪)
 # conf/distributions 是用户运行 gen-key.sh 后的 live 副本 (gitignore)
 local-repo/conf/distributions
-local-repo/keys/                  # GPG 私钥, 绝不入仓
-local-repo/db/                    # reprepro SQLite
-local-repo/pool/                  # 上传的 .deb
-local-repo/dists/                 # 签名的 Release/Packages
-local-repo/incoming/              # 临时入站
+# GPG 私钥, 绝不入仓
+local-repo/keys/
+# reprepro SQLite
+local-repo/db/
+# 上传的 .deb
+local-repo/pool/
+# 签名的 Release/Packages
+local-repo/dists/
+# 临时入站
+local-repo/incoming/
 local-repo/scripts/*.sh.bak
 
 # Example package build outputs
