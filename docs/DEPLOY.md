@@ -111,6 +111,32 @@ curl -fsSL https://<your-domain>/install.sh | sudo bash
 sudo apt update && sudo apt install myapp
 ```
 
+## 迁移到新机器
+
+打包整个 `~/cloud-apt/` (keys, conf, db, pool, dists) 成可迁移压缩包, 在新机器导入:
+
+```bash
+# 旧机器: 导出
+./local-repo/scripts/migrate-export.sh
+# → 默认输出 ~/cloud-apt/cloud-apt-export-<UTC时间戳>.tar.gz
+#   SHA256 在终端打印, 传输后可对比
+
+# 新机器: 导入 (假设 ~/cloud-apt 还没有)
+./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-<ts>.tar.gz
+# → 自动校验 magic (CLOUD-APT-EXPORT-V1)
+#   若目标目录已存在, 自动备份为 <target>.bak.<ts>
+#   还原 keys/ 700, private.key.gpg/keyid.txt 600
+```
+
+**导入包识别**: 包内顶部固定含 `EXPORT-MANIFEST.json`, 第一行 `"magic": "CLOUD-APT-EXPORT-V1"`. 任何 magic 不匹配的 `.tar.gz` 都会被拒绝.
+
+**体积优化**: `INCLUDE_DISTS=0 ./migrate-export.sh` 不打包 `dists/`, 导入后 `reprepro export` 重新签名 (GPG key 一致, 签名结果字节级相同).
+
+**安全提示**:
+- 包内私钥 (`keys/private.key.gpg`) 仍是 passphrase 加密的, 务必保管好 passphrase
+- 传输用加密通道 (scp, encrypted USB, password manager 附件)
+- 导入后建议立即验证 GPG: `gpg --list-secret-keys <email>`
+
 ## 故障排查
 
 ### wrangler deploy 失败
