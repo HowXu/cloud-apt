@@ -4,7 +4,7 @@
 
 **Method**: 4 parallel subagent static reviews (Worker core, deploy + config, local-repo scripts + Dockerfile, example deb + client install + GPG lifecycle), with each item cross-referenced to its v2 entry.
 
-**Verdict**: **0 Critical**, **3 Important claimed** (1 real, 2 false positive / theoretical), **14 Minor** (4 actionable, 10 informational).
+**Verdict**: **0 Critical**, **3 Important claimed** (1 real, 2 false positive / theoretical), **14 Minor** (4 actionable, 10 informational). **All actionable items closed in `cb5f927` + `115a60b`** — final state **0/0/0**.
 
 ## Findings — Important (adjudicated)
 
@@ -145,21 +145,21 @@ All v2 items verified at commit `901719a`:
 
 Real items to fix (excluding documented-only / deferred):
 
-1. **C/I-5** (uninstall.sh all-mode) — `mapfile -t PKGS < <(...)` + `"${PKGS[@]}"`.
-2. **A/M-25** (api-index.ts :suite) — `validateSuite()` helper in path.ts + call in handleIndex/handleSearch.
-3. **A/M-26** (DEPLOY.md /uninstall.sh) — add `/uninstall.sh` next to `/install.sh`.
-4. **D/M-30** (example/README.md) — rewrite to reference `cloud-apt-hello`.
-5. **D/M-31** (example/cloud-apt-hello tracked) — `.gitignore` + `git rm --cached`.
-6. **D/M-33** (gen-key.sh cleanup gpgconf) — append `gpgconf --kill gpg-agent` to cleanup().
+1. **C/I-5** (uninstall.sh all-mode) — `mapfile -t PKGS < <(...)` + `"${PKGS[@]}"`. **Fixed in `115a60b`**.
+2. **A/M-25** (api-index.ts :suite) — `validateSuite()` helper in path.ts + call in handleIndex/handleSearch. **Fixed in `115a60b`** (with Vitest case `returns 400 on invalid suite`).
+3. **A/M-26** (DEPLOY.md /uninstall.sh) — add `/uninstall.sh` next to `/install.sh`. **Fixed in `115a60b`**.
+4. **D/M-30** (example/README.md) — rewrite to reference `cloud-apt-hello`. **Fixed in `115a60b`**.
+5. **D/M-31** (example/cloud-apt-hello tracked) — `.gitignore` + `git rm --cached`. **Fixed in `115a60b`**.
+6. **D/M-33** (gen-key.sh cleanup gpgconf) — append `gpgconf --kill gpg-agent` to cleanup(). **Fixed in `cb5f927`**.
 
 Documentation-only (no commit):
 
-7. **A/M-23** — code comment in auth.ts pointing out the length-leak trade-off.
-8. **A/M-24** — code comment in wrangler.toml pointing to auth-no-leak.test.ts.
+7. **A/M-23** — code comment in auth.ts pointing out the length-leak trade-off. **Documented as-acceptable** (token length is a fixed deployment constant, not per-user data; the timing channel leaks no useful information).
+8. **A/M-24** — code comment in wrangler.toml pointing to auth-no-leak.test.ts. **Documented as-acceptable** (the invariant is enforced by the regression test, which is the right place for this kind of guard).
 
 Operator-only (no commit):
 
-9. **D/M-32** — `rm example/artifacts/hello_0.1.0-1_amd64.deb`.
+9. **D/M-32** — `rm example/artifacts/hello_0.1.0-1_amd64.deb`. **Operator action** — run `rm example/artifacts/hello_0.1.0-1_amd64.deb` if the artifact is no longer needed.
 
 After fix wave: 0 Critical, 0 Important, 0 Minor actionable.
 
