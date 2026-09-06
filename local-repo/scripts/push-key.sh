@@ -2,7 +2,7 @@
 # 推送 GPG 公钥到 Worker
 set -euo pipefail
 
-REPO_ROOT="${CLOUD_APT_ROOT:-$HOME/cloud-apt}"
+REPO_ROOT="${CLOUD_APT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 KEY_FILE="$REPO_ROOT/keys/public.key"
 : "${WORKER_URL:?需要设置 WORKER_URL (例如 https://apt.example.com)}"
 : "${ADMIN_PUSH_TOKEN:?需要设置 ADMIN_PUSH_TOKEN}"

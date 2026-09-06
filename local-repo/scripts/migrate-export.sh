@@ -8,7 +8,8 @@
 #   INCLUDE_DISTS=0 ./migrate-export.sh       # 不打包 dists/ (体积更小, 导入后需 reprepro export 重签)
 set -euo pipefail
 
-REPO_ROOT="${CLOUD_APT_ROOT:-$HOME/cloud-apt}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="${1:-$REPO_ROOT/cloud-apt-export-$TS.tar.gz}"
 

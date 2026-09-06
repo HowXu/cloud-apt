@@ -8,7 +8,8 @@
 set -euo pipefail
 
 ARCHIVE="${1:?需要 .tar.gz 导出包路径}"
-TARGET="${2:-${CLOUD_APT_ROOT:-$HOME/cloud-apt}}"
+DEFAULT_TARGET="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET="${2:-${CLOUD_APT_ROOT:-$DEFAULT_TARGET}}"
 
 # ---------- 校验 archive 本身 ----------
 if [[ ! -f "$ARCHIVE" ]]; then

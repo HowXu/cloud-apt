@@ -6,7 +6,7 @@ set -euo pipefail
 DEB="${1:?需要 .deb 文件路径}"
 CODENAME="${2:-kali-rolling}"
 
-REPO_ROOT="${CLOUD_APT_ROOT:-$HOME/cloud-apt}"
+REPO_ROOT="${CLOUD_APT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 : "${WORKER_URL:?需要设置 WORKER_URL}"
 : "${ADMIN_PUSH_TOKEN:?需要设置 ADMIN_PUSH_TOKEN}"
 : "${GPG_PASSPHRASE:?需要设置 GPG_PASSPHRASE}"

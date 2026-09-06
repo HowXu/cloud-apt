@@ -2,7 +2,8 @@
 # 一次性: 生成 GPG 密钥对 (ed25519, 2 年过期)
 set -euo pipefail
 
-REPO_ROOT="${CLOUD_APT_ROOT:-$HOME/cloud-apt}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR}"
 KEY_DIR="$REPO_ROOT/keys"
 
 echo "→ GPG 密钥生成 (ed25519, 2 年过期)"
