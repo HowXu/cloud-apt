@@ -26,6 +26,13 @@ if [[ ! -f "$REPO_ROOT/conf/distributions" ]]; then
     exit 1
 fi
 
+# 防御: 检测 gen-key.sh 还没跑过的占位符
+if grep -q '^SignWith:.*__GPG_EMAIL__' "$REPO_ROOT/conf/distributions"; then
+    echo "✗ conf/distributions 仍是模板占位符 (SignWith: __GPG_EMAIL__)" >&2
+    echo "  请先跑 ./local-repo/scripts/gen-key.sh 生成 GPG 密钥并替换占位符" >&2
+    exit 1
+fi
+
 CONFDIR="$REPO_ROOT/conf"
 
 cd "$REPO_ROOT"

@@ -1,7 +1,6 @@
 Origin: cloud-apt
 Label: Personal APT Repository
-SignWith: __GPG_EMAIL__   # ← gen-key.sh 时填入实际邮箱
-
+SignWith: __GPG_EMAIL__
 Codename: kali-rolling
 Suite: kali-rolling
 Architectures: amd64 arm64
