@@ -11,6 +11,9 @@ REPO_ROOT="${CLOUD_APT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 : "${ADMIN_PUSH_TOKEN:?需要设置 ADMIN_PUSH_TOKEN}"
 : "${GPG_PASSPHRASE:?需要设置 GPG_PASSPHRASE}"
 
+# DEB 路径立刻转绝对路径, 不然后面 'cd $REPO_ROOT' 后 reprepro 找不到
+DEB="$(realpath "$DEB")"
+
 # Pass token via curl config file to keep it out of argv (visible to ps/e)
 _CURL_CONF=$(mktemp)
 chmod 600 "$_CURL_CONF"
