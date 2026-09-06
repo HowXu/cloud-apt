@@ -156,6 +156,11 @@ npm run build
 
 `docs/superpowers/specs/2026-09-02-cloud-apt-repository-design.md`
 
+## Security Audits
+
+- v1: [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md)
+- v2: [docs/SECURITY-AUDIT-2.md](docs/SECURITY-AUDIT-2.md)
+
 ## License
 
 MIT
