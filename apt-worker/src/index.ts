@@ -6,6 +6,8 @@ import { handleIndex, handleSearch } from './api-index';
 import { invalidate } from './cache';
 import { checkAuth, authDebug } from './shared/auth';
 
+console.log('[STARTUP] cloud-apt worker v0.1.0-dev-debug loaded @ ' + new Date().toISOString());
+
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.post('/api/invalidate', async (c) => {
