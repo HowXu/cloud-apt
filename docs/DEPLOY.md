@@ -104,6 +104,25 @@ read -rs GPG_PASSPHRASE && export GPG_PASSPHRASE
 unset GPG_PASSPHRASE
 ```
 
+## 移除包
+
+```bash
+./local-repo/scripts/build-and-push.sh --remove <pkg>
+```
+
+调用 `reprepro remove` + `reprepro export`, 只上传变更的 `dists/*`.
+默认会交互式确认, 设置 `YES=1` 跳过确认 (CI / 脚本场景).
+用于下架某个版本而无需重新打包 .deb.
+
+## 手动 reprepro 编辑后同步
+
+```bash
+./local-repo/scripts/build-and-push.sh --sync
+```
+
+只调用 `reprepro export` 并上传 `dists/*`. 用于 `reprepro expire`,
+`reprepro filter` 等手动操作后重新签名并同步.
+
 ## 客户端使用
 
 ```bash
