@@ -41,7 +41,7 @@ fi
 _CURL_CONF=$(mktemp)
 chmod 600 "$_CURL_CONF"
 printf 'header = "Authorization: Bearer %s"\n' "$ADMIN_PUSH_TOKEN" > "$_CURL_CONF"
-trap 'shred -u "$_CURL_CONF" 2>/dev/null; rm -f "$_CURL_CONF"; unset ADMIN_PUSH_TOKEN' EXIT
+trap 'shred -u "$_CURL_CONF" 2>/dev/null; rm -f "$_CURL_CONF"; unset ADMIN_PUSH_TOKEN; unset GPG_PASSPHRASE' EXIT
 
 export GPG_PASSPHRASE
 

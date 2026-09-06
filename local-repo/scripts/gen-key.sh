@@ -43,10 +43,10 @@ if [[ -n "$EXISTING" ]]; then
     exit 1
 fi
 
-export GPG_PASSPHRASE
-
 mkdir -p "$KEY_DIR"
 chmod 700 "$KEY_DIR"
+
+trap 'shred -u "$KEY_DIR/private.key" "$KEY_DIR/gpg-gen-key.conf" 2>/dev/null || true; unset GPG_PASSPHRASE' EXIT
 
 cat >"$KEY_DIR/gpg-gen-key.conf" <<EOF
 %echo Generating cloud-apt signing key

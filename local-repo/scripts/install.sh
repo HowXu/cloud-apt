@@ -14,6 +14,12 @@ else
     SUITE="$DEFAULT_SUITE"
 fi
 
+if [[ ! "$SUITE" =~ ^[a-z0-9][a-z0-9.+~-]*$ ]]; then
+    echo "✗ CLOUD_APT_SUITE 非法: '$SUITE'" >&2
+    echo "  期望格式: 小写字母数字开头, 后续允许 . + ~ - (deb822 suite 规则)" >&2
+    exit 1
+fi
+
 curl -fsSL "https://${DOMAIN}/pubkey.asc" | \
     sudo gpg --dearmor -o "$KEYRING"
 sudo chmod 644 "$KEYRING"
