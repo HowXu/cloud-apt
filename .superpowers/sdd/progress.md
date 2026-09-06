@@ -80,3 +80,13 @@ All 24 tasks executed + 2 Important fixes from whole-branch review. Final state:
 Full security audit dispatched. Findings: 0 Critical, 6 Important, 9 Minor. Applied 9 atomic commits (I-1 to I-6 + M-1, M-3, M-8, M-9). Deferred: I-7 (gen-key GPG refactor), M-2/M-4/M-5/M-6/M-7 (out of scope).
 
 Final state: 36 commits · 44/44 tests · 0 typecheck errors · build succeeds · audit report at `docs/SECURITY-AUDIT.md`.
+
+## Deploy fix (post-security audit)
+
+Cloudflare Git import failed with `apt-worker/dist does not exist`. Root cause: DEPLOY.md said "Build command: 留空", but wrangler.toml's [assets] needs `apt-worker/dist/` populated, which only `npm run build:copy` (from project root) does. Cloudflare's CWD is `apt-worker/`, so build:copy never ran.
+
+Fix (commit 0d8f589): added `[build]` block to `apt-worker/wrangler.toml` that runs `npm --prefix ../apt-client run build -- --outDir ../apt-worker/dist --emptyOutDir` at deploy time. Mirrors cloud-maven's pattern.
+
+DEPLOY.md updated to explain why Build command must be left empty (so wrangler's [build] takes over), and added the error message + fix to troubleshooting.
+
+Verified: production (Cloudflare [build] block) + local (npm run build via build:copy) both produce `apt-worker/dist/`. 44/44 tests pass. Typecheck clean.
