@@ -22,6 +22,12 @@ else
     echo "(使用已 export 的 GPG_PASSPHRASE, 长度 ${#GPG_PASSPHRASE})"
 fi
 
+# M-12: 长度校验 (apply to both read + export paths)
+if [[ ${#GPG_PASSPHRASE} -lt 12 ]]; then
+    echo "✗ passphrase 太短 (${#GPG_PASSPHRASE} 字符, 至少 12), 请使用强密码" >&2
+    exit 1
+fi
+
 # 询问邮箱 (会写入 reprepro.conf 的 SignWith)
 read -rp "请输入 GPG 邮箱 (例如 apt@example.com): " GPG_EMAIL
 if [[ -z "$GPG_EMAIL" ]]; then
@@ -46,9 +52,25 @@ fi
 mkdir -p "$KEY_DIR"
 chmod 700 "$KEY_DIR"
 
-trap 'shred -u "$KEY_DIR/private.key" "$KEY_DIR/gpg-gen-key.conf" 2>/dev/null || true; unset GPG_PASSPHRASE' EXIT
+# I-2: 不再写 gpg-gen-key.conf 到磁盘, passphrase 通过 fd 3 传入.
+# M-13: 跟踪 mktemp 临时文件, EXIT 时 shred 残留 (含 private.key).
+TMP_FILES=()
+cleanup() {
+    local f
+    for f in "${TMP_FILES[@]}"; do
+        [[ -n "$f" && -e "$f" ]] && shred -u "$f" 2>/dev/null || rm -f "$f" 2>/dev/null || true
+    done
+    [[ -e "$KEY_DIR/private.key" ]] && shred -u "$KEY_DIR/private.key" 2>/dev/null || true
+    unset GPG_PASSPHRASE
+}
+trap cleanup EXIT
 
-cat >"$KEY_DIR/gpg-gen-key.conf" <<EOF
+gpgconf --kill gpg-agent 2>/dev/null || true
+
+# I-2: 全部选项 inline 进 stdin (heredoc), passphrase 通过 fd 3 (here-string,
+# 不落盘). gpg-gen-key.conf 不再写到磁盘.
+gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
+    --gen-key 3<<<"$GPG_PASSPHRASE" <<EOF
 %echo Generating cloud-apt signing key
 Key-Type: eddsa
 Key-Curve: ed25519
@@ -56,13 +78,8 @@ Key-Usage: sign
 Name-Real: cloud-apt archive signing key
 Name-Email: $GPG_EMAIL
 Expire-Date: 2y
-Passphrase: $GPG_PASSPHRASE
+%commit
 EOF
-
-chmod 600 "$KEY_DIR/gpg-gen-key.conf"
-gpgconf --kill gpg-agent 2>/dev/null || true
-
-gpg --batch --pinentry-mode loopback --gen-key "$KEY_DIR/gpg-gen-key.conf"
 
 FPR=$(gpg --list-keys --with-colons "$GPG_EMAIL" | awk -F: '/^fpr:/ {print $10; exit}')
 
@@ -71,27 +88,40 @@ if [[ -z "$FPR" ]]; then
     exit 1
 fi
 
-# 导出公钥 (明文, 待 push)
-gpg --export --armor "$FPR" > "$KEY_DIR/public.key"
+# M-13: 原子写 public.key (tmp + mv, 同 fs 保证原子)
+tmp=$(mktemp "$KEY_DIR/.tmp.XXXX")
+TMP_FILES+=("$tmp")
+chmod 600 "$tmp"
+gpg --export --armor "$FPR" > "$tmp"
+mv -f "$tmp" "$KEY_DIR/public.key"
 
-# 导出私钥 (受 passphrase 保护)
-gpg --export-secret-keys --armor "$FPR" > "$KEY_DIR/private.key"
+# M-13: 原子写 private.key
+tmp=$(mktemp "$KEY_DIR/.tmp.XXXX")
+TMP_FILES+=("$tmp")
+chmod 600 "$tmp"
+gpg --export-secret-keys --armor "$FPR" > "$tmp"
+mv -f "$tmp" "$KEY_DIR/private.key"
 
-# 对称加密双保险
+# M-11: passphrase 同样走 fd 3, 不进 argv (避免 ps/top 可见)
 gpg --batch --yes --pinentry-mode loopback \
-    --passphrase "$GPG_PASSPHRASE" \
+    --passphrase-fd 3 \
     --symmetric --cipher-algo AES256 \
-    --output "$KEY_DIR/private.key.gpg" "$KEY_DIR/private.key"
+    --output "$KEY_DIR/private.key.gpg" "$KEY_DIR/private.key" \
+    3<<<"$GPG_PASSPHRASE"
 
-shred -u "$KEY_DIR/private.key" "$KEY_DIR/gpg-gen-key.conf"
+shred -u "$KEY_DIR/private.key"
 chmod 600 "$KEY_DIR/private.key.gpg" "$KEY_DIR/public.key"
 unset GPG_PASSPHRASE
 
-# 写入 keyid.txt 供后续脚本用
-cat >"$KEY_DIR/keyid.txt" <<EOF
+# M-13: 原子写 keyid.txt 供后续脚本用
+tmp=$(mktemp "$KEY_DIR/.tmp.XXXX")
+TMP_FILES+=("$tmp")
+chmod 600 "$tmp"
+cat >"$tmp" <<EOF
 EMAIL=$GPG_EMAIL
 FPR=$FPR
 EOF
+mv -f "$tmp" "$KEY_DIR/keyid.txt"
 chmod 600 "$KEY_DIR/keyid.txt"
 
 ACTUAL_FPR="$(gpg --list-secret-keys --with-colons "$GPG_EMAIL" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
