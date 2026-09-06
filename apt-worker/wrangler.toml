@@ -1,4 +1,4 @@
-name = "cloud-apt-worker"
+name = "cloud-apt"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
