@@ -37,10 +37,8 @@ chmod 755 "$STAGE/DEBIAN/prerm"
 
 echo '2.0' > "$STAGE/DEBIAN/debian-binary"
 
-# 4. 属主 (--root-owner-group 已能盖过, 显式再做一次保险)
-chown -R 0:0 "$STAGE"
-
-# 5. 打包
+# 4. 打包. --root-owner-group 把所有 entry 的属主重写为 root:root,
+#    不需要 (也不应该) 提前 chown -R 0:0 — 非 root 用户跑会直接报错.
 DEB="${ARTIFACTS}/${PKG}_${VERSION}-${RELEASE}_${ARCH}.deb"
 dpkg-deb -Zgzip -z9 --root-owner-group --uniform-compression \
     --build "$STAGE" "$DEB"
