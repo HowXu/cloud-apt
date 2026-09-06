@@ -1,5 +1,5 @@
-PKG      := hello
-VERSION  := 0.1.0
+PKG      := cloud-apt-hello
+VERSION  := 0.2.0
 PREFIX   := /opt/$(PKG)-$(VERSION)
 DESTDIR  :=
 
@@ -8,14 +8,14 @@ CFLAGS   ?= -O2 -Wall -Wextra -std=c11
 
 .PHONY: all install clean
 
-all: hello
+all: cloud-apt-hello
 
-hello: hello.c
+cloud-apt-hello: cloud-apt-hello.c
 	$(CC) $(CFLAGS) -o $@ $<
 
-install: hello
+install: cloud-apt-hello
 	install -d $(DESTDIR)$(PREFIX)/bin
-	install -m 755 hello $(DESTDIR)$(PREFIX)/bin/hello
+	install -m 755 cloud-apt-hello $(DESTDIR)$(PREFIX)/bin/cloud-apt-hello
 
 clean:
-	rm -f hello
+	rm -f cloud-apt-hello

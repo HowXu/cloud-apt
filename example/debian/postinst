@@ -1,13 +1,15 @@
 #!/bin/sh
 set -e
 
-PREFIX="/opt/hello-0.1.0"
+PREFIX="/opt/cloud-apt-hello-0.2.0"
 
 case "$1" in
     configure)
-        ln -sf "$PREFIX/bin/hello" /usr/local/bin/hello
-        echo "hello: installed /usr/local/bin/hello -> $PREFIX/bin/hello"
+        ln -sf "$PREFIX/bin/cloud-apt-hello" /usr/local/bin/cloud-apt-hello
+        echo "cloud-apt-hello: installed /usr/local/bin/cloud-apt-hello -> $PREFIX/bin/cloud-apt-hello"
         ;;
 esac
 
 exit 0
+
+

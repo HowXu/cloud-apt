@@ -1,11 +1,18 @@
-Package: hello
-Version: 0.1.0-1
+Package: cloud-apt-hello
+Version: 0.2.0-1
 Architecture: amd64
 Maintainer: cloud-apt example <noreply@example.com>
 Section: utils
 Priority: optional
 Depends: libc6
-Description: hello-world example for cloud-apt
+Description: cloud-apt namespaced hello example
  A minimal C program packaged as a .deb to demonstrate the
- cloud-apt repository workflow. Installs /opt/hello-0.1.0/bin/hello
- and exposes it via /usr/local/bin/hello.
+ cloud-apt repository workflow. The package is intentionally
+ named 'cloud-apt-hello' (not 'hello') to avoid conflicting
+ with the official Debian 'hello' package in main (which
+ prints 'Hello, world!' and is used for dpkg/apt smoke tests).
+ .
+ Installs /opt/cloud-apt-hello-0.2.0/bin/cloud-apt-hello and
+ exposes it via /usr/local/bin/cloud-apt-hello. Supports
+ --version, --repo, and --help flags for verifying which
+ version is installed and which repository it came from.

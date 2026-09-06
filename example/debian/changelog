@@ -1,5 +1,15 @@
-hello (0.1.0-1) unstable; urgency=low
+cloud-apt-hello (0.2.0-1) unstable; urgency=low
 
-  * Initial hello-world example package.
+  * Rename from 'hello' to 'cloud-apt-hello' to avoid conflict
+    with the official Debian 'hello' package in main.
+  * Add --version, --repo, --help flags.
+
+ -- cloud-apt example <noreply@example.com>  Sun, 06 Sep 2026 12:30:00 +0000
+
+cloud-apt-hello (0.1.0-1) unstable; urgency=low
+
+  * Initial hello-world example package (originally named
+    'hello', renamed in 0.2.0).
 
  -- cloud-apt example <noreply@example.com>  Sun, 06 Sep 2026 12:00:00 +0000
+

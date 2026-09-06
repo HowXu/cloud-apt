@@ -3,8 +3,10 @@ set -e
 
 case "$1" in
     remove|deconfigure)
-        rm -f /usr/local/bin/hello
+        rm -f /usr/local/bin/cloud-apt-hello
         ;;
 esac
 
 exit 0
+
+

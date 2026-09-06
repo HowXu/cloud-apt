@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build hello-0.1.0 .deb locally (no act/podman needed).
-# 输出: ./artifacts/hello_0.1.0-1_amd64.deb
+# Build cloud-apt-hello-0.2.0 .deb locally (no act/podman needed).
+# 输出: ./artifacts/cloud-apt-hello_0.2.0-1_amd64.deb
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PKG=hello
-VERSION=0.1.0
+PKG=cloud-apt-hello
+VERSION=0.2.0
 RELEASE=1
 ARCH=amd64
 PREFIX="/opt/${PKG}-${VERSION}"
