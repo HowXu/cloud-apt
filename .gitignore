@@ -11,6 +11,10 @@ coverage/
 local-repo/conf/distributions.local
 local-repo/keys/
 
+# Example package build outputs
+example/artifacts/
+example/hello
+
 # OS / Editor
 .DS_Store
 *.swp

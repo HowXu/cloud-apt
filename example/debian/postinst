@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+PREFIX="/opt/hello-0.1.0"
+
+case "$1" in
+    configure)
+        ln -sf "$PREFIX/bin/hello" /usr/local/bin/hello
+        echo "hello: installed /usr/local/bin/hello -> $PREFIX/bin/hello"
+        ;;
+esac
+
+exit 0

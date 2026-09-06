@@ -1,0 +1,11 @@
+Package: hello
+Version: 0.1.0-1
+Architecture: amd64
+Maintainer: cloud-apt example <noreply@example.com>
+Section: utils
+Priority: optional
+Depends: libc6
+Description: hello-world example for cloud-apt
+ A minimal C program packaged as a .deb to demonstrate the
+ cloud-apt repository workflow. Installs /opt/hello-0.1.0/bin/hello
+ and exposes it via /usr/local/bin/hello.

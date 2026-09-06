@@ -1,0 +1,5 @@
+hello (0.1.0-1) unstable; urgency=low
+
+  * Initial hello-world example package.
+
+ -- cloud-apt example <noreply@example.com>  Sun, 06 Sep 2026 12:00:00 +0000
