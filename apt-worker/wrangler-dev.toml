@@ -34,5 +34,5 @@ id = "local-dev-kv"
 binding = "APT_BUCKET"
 bucket_name = "local-dev-bucket"
 
+# ADMIN_PUSH_TOKEN 已移至 .dev.vars (本地 secrets, 不入仓)
 [vars]
-ADMIN_PUSH_TOKEN = "dev-token-1234"

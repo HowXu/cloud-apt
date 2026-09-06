@@ -36,3 +36,4 @@ example/hello
 # Secrets
 *.env
 .env
+apt-worker/.dev.vars

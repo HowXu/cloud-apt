@@ -52,7 +52,7 @@ app.get('*', async (c) => {
     h.set('X-Content-Type-Options', 'nosniff');
     h.set('Referrer-Policy', 'no-referrer');
     h.set('X-Frame-Options', 'DENY');
-    h.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self';");
+    h.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';");
     return new Response(res.body, { status: res.status, headers: h });
 });
 

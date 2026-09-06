@@ -15,5 +15,6 @@ export async function proxyR2(
     obj.writeHttpMetadata(headers);
     if (contentType) headers.set('Content-Type', contentType);
     headers.set('Cache-Control', 'public, max-age=300');
+    headers.set('X-Content-Type-Options', 'nosniff');
     return new Response(obj.body, { headers });
 }
