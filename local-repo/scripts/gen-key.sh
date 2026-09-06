@@ -94,6 +94,19 @@ FPR=$FPR
 EOF
 chmod 600 "$KEY_DIR/keyid.txt"
 
+ACTUAL_FPR="$(gpg --list-secret-keys --with-colons "$GPG_EMAIL" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
+if [[ -z "$ACTUAL_FPR" ]]; then
+    echo "✗ keyring 找不到 <$GPG_EMAIL> 的私钥, 生成疑似失败" >&2
+    exit 1
+fi
+if [[ "$ACTUAL_FPR" != "$FPR" ]]; then
+    echo "✗ 写盘后 FPR 自检失败 — keyid.txt=$FPR keyring=$ACTUAL_FPR" >&2
+    echo "  通常说明 keys/ 被陈旧文件覆盖了, 检查:" >&2
+    echo "    cat local-repo/keys/keyid.txt" >&2
+    echo "    gpg --list-secret-keys --with-colons $GPG_EMAIL" >&2
+    exit 1
+fi
+
 # 同步更新 conf/distributions 的 SignWith.
 # 之前会被静默跳过 (conf/distributions 不存在时), 留一个 __GPG_EMAIL__
 # 占位符让 build-and-push.sh 后面 fail, 用户摸不着头脑.
