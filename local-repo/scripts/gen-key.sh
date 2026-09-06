@@ -62,6 +62,7 @@ cleanup() {
     done
     [[ -e "$KEY_DIR/private.key" ]] && shred -u "$KEY_DIR/private.key" 2>/dev/null || true
     unset GPG_PASSPHRASE
+    gpgconf --kill gpg-agent 2>/dev/null || true
 }
 trap cleanup EXIT
 
