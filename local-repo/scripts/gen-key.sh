@@ -7,13 +7,18 @@ KEY_DIR="$REPO_ROOT/keys"
 
 echo "→ GPG 密钥生成 (ed25519, 2 年过期)"
 echo ""
-echo "请输入 passphrase (私钥密码, 必须记住并备份):"
-read -rs GPG_PASSPHRASE
-echo ""
 
-if [[ -z "$GPG_PASSPHRASE" ]]; then
-    echo "✗ passphrase 不能为空" >&2
-    exit 1
+# 已经 export 过就直接用, 否则才交互读 (read -rs 是 silent,
+# 没 -p 提示符会让人以为卡住了)
+if [[ -z "${GPG_PASSPHRASE:-}" ]]; then
+    read -rsp "请输入 passphrase (私钥密码, 必须记住并备份): " GPG_PASSPHRASE
+    echo ""
+    if [[ -z "$GPG_PASSPHRASE" ]]; then
+        echo "✗ passphrase 不能为空" >&2
+        exit 1
+    fi
+else
+    echo "(使用已 export 的 GPG_PASSPHRASE, 长度 ${#GPG_PASSPHRASE})"
 fi
 
 # 询问邮箱 (会写入 reprepro.conf 的 SignWith)
