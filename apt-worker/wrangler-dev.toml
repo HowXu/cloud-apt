@@ -16,6 +16,14 @@ not_found_handling = "single-page-application"
 
 [observability.logs]
 enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[observability.traces]
+enabled = false
+head_sampling_rate = 1
+persist = true
 
 # 本地开发用 Cloudflare 提供的 miniflare 模拟 KV + R2
 [[kv_namespaces]]
