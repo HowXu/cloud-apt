@@ -1,4 +1,5 @@
-FROM kalilinux/kali-rolling:latest
+# Refresh digest with: docker pull kalilinux/kali-rolling:latest && docker inspect --format='{{index .RepoDigests 0}}' kalilinux/kali-rolling:latest
+FROM kalilinux/kali-rolling@sha256:PLACEHOLDER_GET_REAL_DIGEST_VIA_DOCKER_PULL
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential devscripts debhelper \
