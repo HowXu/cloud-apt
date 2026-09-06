@@ -58,14 +58,23 @@ fi
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
+# 用 jq 把 hostname/whoami 安全转义为 JSON 字符串 (防 JSON 注入, M-16)
+if command -v jq >/dev/null 2>&1; then
+    HOSTNAME_ESC=$(hostname | jq -Rs '.')
+    USER_ESC=$(whoami | jq -Rs '.')
+else
+    HOSTNAME_ESC=$(hostname | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().rstrip("\n")))')
+    USER_ESC=$(whoami | python3 -c 'import json,sys;print(json.dumps(sys.stdin.read().rstrip("\n")))')
+fi
+
 cat > "$STAGE/EXPORT-MANIFEST.json" <<EOF
 {
   "magic": "CLOUD-APT-EXPORT-V1",
   "version": 1,
   "tool": "cloud-apt",
   "created_at": "$TS",
-  "hostname": "$(hostname)",
-  "user": "$(whoami)",
+  "hostname": $HOSTNAME_ESC,
+  "user": $USER_ESC,
   "gpg_email": "$EMAIL",
   "gpg_fpr": "$FPR",
   "include_dists": $([[ "${INCLUDE_DISTS:-1}" == "0" ]] && echo false || echo true)

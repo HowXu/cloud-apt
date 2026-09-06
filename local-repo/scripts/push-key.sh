@@ -9,6 +9,12 @@ KEY_FILE="$REPO_ROOT/keys/public.key"
 
 [[ "$WORKER_URL" == https://* ]] || { echo "✗ WORKER_URL 必须以 https:// 开头 (避免明文传 token)" >&2; exit 1; }
 
+# 从 WORKER_URL 提取域名并校验字符 (M-21, 镜像 push-install.sh)
+DOMAIN="${WORKER_URL#https://}"
+DOMAIN="${DOMAIN#http://}"
+DOMAIN="${DOMAIN%%/*}"
+[[ "$DOMAIN" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "✗ WORKER_URL 域非法: $DOMAIN" >&2; exit 1; }
+
 # Pass token via curl config file to keep it out of argv (visible to ps/e)
 _CURL_CONF=$(mktemp)
 chmod 600 "$_CURL_CONF"

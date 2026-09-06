@@ -101,7 +101,8 @@ if [[ -z "$TO_UPLOAD" ]]; then
 fi
 
 # 4. 推送每个文件
-for f in $TO_UPLOAD; do
+while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
     CT="application/octet-stream"
     case "$f" in
         *.deb)        CT="application/vnd.debian.binary-package" ;;
@@ -117,7 +118,7 @@ for f in $TO_UPLOAD; do
         echo "  ✗ 上传失败: $f" >&2
         exit 1
     fi
-done
+done <<< "$TO_UPLOAD"
 
 # 5. 通知 Worker 失效缓存
 curl -fsS -X POST "$WORKER_URL/api/invalidate?suite=$CODENAME" \

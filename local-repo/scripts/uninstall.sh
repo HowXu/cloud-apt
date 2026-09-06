@@ -46,7 +46,7 @@ if [[ -n "${CLOUD_APT_PURGE:-}" ]]; then
             echo "  ⚠ sources 已删除, 无法判断包来源, 跳过"
         fi
     else
-        PKGS=( ${CLOUD_APT_PURGE//,/ } )
+        mapfile -t PKGS < <(printf '%s\n' "${CLOUD_APT_PURGE//,/ }")
         echo "  卸载包: ${PKGS[*]}"
         sudo apt purge -y "${PKGS[@]}"
     fi
@@ -76,6 +76,9 @@ fi
 
 # 5. 刷新 apt 缓存 (sources 删了, 原 cloud-apt 仓库的包不会再出现)
 sudo apt update || true
+
+# 6. 清掉从此仓库下载的 deb 缓存 (无害, 不影响其它来源)
+sudo apt-get clean
 
 echo ""
 echo "✓ cloud-apt 已卸载"
