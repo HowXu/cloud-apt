@@ -4,16 +4,12 @@ import { proxyR2 } from './proxy';
 import { handleUpload } from './upload';
 import { handleIndex, handleSearch } from './api-index';
 import { invalidate } from './cache';
-import { checkAuth, authDebug } from './shared/auth';
-
-console.log('[STARTUP] cloud-apt worker v0.1.0-dev-debug loaded @ ' + new Date().toISOString());
+import { checkAuth } from './shared/auth';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.post('/api/invalidate', async (c) => {
-    if (!checkAuth(c.req.raw, c.env)) {
-        return c.json({ error: 'Unauthorized', ...authDebug(c.req.raw, c.env) }, 401);
-    }
+    if (!checkAuth(c.req.raw, c.env)) return c.text('Unauthorized', 401);
     const suite = c.req.query('suite');
     if (!suite) return c.text('Missing suite', 400);
     await invalidate(c.env, suite);
@@ -33,6 +29,7 @@ app.get('/dists/*', (c) => proxyR2(c.env, c.req.path.slice(1)));
 app.get('/pool/*', (c) => proxyR2(c.env, c.req.path.slice(1)));
 app.get('/pubkey.asc', (c) => proxyR2(c.env, 'pubkey.asc', 'text/plain'));
 app.get('/install.sh', (c) => proxyR2(c.env, 'scripts/install.sh', 'text/plain; charset=utf-8'));
+app.get('/uninstall.sh', (c) => proxyR2(c.env, 'scripts/uninstall.sh', 'text/plain; charset=utf-8'));
 
 app.get('/api/status/health', (c) => c.json({ status: 'ok' }));
 
