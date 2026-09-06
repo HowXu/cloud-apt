@@ -169,6 +169,6 @@ After fix wave: 0 Critical, 0 Important, 0 Minor actionable.
 |---|---|---|---|---|
 | v1 (`c0be5ae`) | 0 | 6 (4 fixed, 2 deferred) | 9 (5 fixed, 4 deferred) | post-audit fixes applied |
 | v2 (`d05e437`) | 0 | 3 (1 fixed in branch, 2 deferred) | 22 (10 fixed, 12 deferred) | post-audit fixes applied (`d05e437`, `901719a`) |
-| v3 (this doc) | 0 | 3 (1 real, 2 false-positive/theoretical) | 14 (4 actionable, 10 informational) | proposed fix wave |
+| v3 (this doc) | 0 | 3 (1 real, 2 false-positive/theoretical) | 14 (4 actionable, 10 informational) | fix wave applied (`cb5f927`, `115a60b`) |
 
-The project is production-ready. v3 surfaced 4 minor actionable items + 1 real Important (C/I-5 — uninstall.sh all-mode). Total fix time: ~30 min.
+The project is production-ready. v3 surfaced 4 minor actionable items + 1 real Important (C/I-5 — uninstall.sh all-mode). Total fix time: ~30 min. **All applied in `115a60b` + `cb5f927`.**
