@@ -1,18 +1,41 @@
 #!/usr/bin/env bash
 # 用法: ./build-and-push.sh <path-to-deb> [codename]
-# 默认 codename=kali-rolling
+#      ./build-and-push.sh --remove <package> [codename]
+#      ./build-and-push.sh --sync [codename]
 set -euo pipefail
 
-DEB="${1:?需要 .deb 文件路径}"
-CODENAME="${2:-kali-rolling}"
+MODE="include"
+case "${1:-}" in
+    --remove)
+        MODE="remove"
+        REMOVE_PKG="${2:?--remove 需要 <package> 参数}"
+        CODENAME="${3:-kali-rolling}"
+        shift 2
+        ;;
+    --sync)
+        MODE="sync"
+        CODENAME="${2:-kali-rolling}"
+        shift
+        ;;
+    --help|-h)
+        sed -n '2,4p' "$0"
+        exit 0
+        ;;
+    *)
+        DEB="${1:?需要 .deb 文件路径}"
+        CODENAME="${2:-kali-rolling}"
+        ;;
+esac
 
 REPO_ROOT="${CLOUD_APT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 : "${WORKER_URL:?需要设置 WORKER_URL}"
 : "${ADMIN_PUSH_TOKEN:?需要设置 ADMIN_PUSH_TOKEN}"
 : "${GPG_PASSPHRASE:?需要设置 GPG_PASSPHRASE}"
 
-# DEB 路径立刻转绝对路径, 不然后面 'cd $REPO_ROOT' 后 reprepro 找不到
-DEB="$(realpath "$DEB")"
+if [[ "$MODE" == "include" ]]; then
+    # DEB 路径立刻转绝对路径, 不然后面 'cd $REPO_ROOT' 后 reprepro 找不到
+    DEB="$(realpath "$DEB")"
+fi
 
 # Pass token via curl config file to keep it out of argv (visible to ps/e)
 _CURL_CONF=$(mktemp)
@@ -43,10 +66,30 @@ cd "$REPO_ROOT"
 # 1. 记下推送前的文件列表 (path + checksum)
 BEFORE=$(find dists pool -type f -exec md5sum {} + 2>/dev/null | sort || true)
 
-# 2. reprepro 吸收 + 重新签名. --confdir 显式指明配置目录,
+# 2. 按 MODE 调用 reprepro. --confdir 显式指明配置目录,
 #    即使将来脚本从其他 CWD 调用也不会去找 ./conf/distributions.
-reprepro --confdir "$CONFDIR" includedeb "$CODENAME" "$DEB"
-reprepro --confdir "$CONFDIR" export "$CODENAME"
+case "$MODE" in
+    remove)
+        if [[ "${YES:-}" != "1" ]]; then
+            read -rp "Confirm remove $REMOVE_PKG from $CODENAME? [y/N] " ans
+            if [[ ! "$ans" =~ ^[Yy]$ ]]; then
+                echo "✗ 已取消"
+                exit 1
+            fi
+        fi
+        echo "→ reprepro remove $CODENAME $REMOVE_PKG"
+        reprepro --confdir "$CONFDIR" remove "$CODENAME" "$REMOVE_PKG"
+        reprepro --confdir "$CONFDIR" export "$CODENAME"
+        ;;
+    sync)
+        echo "→ reprepro export $CODENAME (sync only)"
+        reprepro --confdir "$CONFDIR" export "$CODENAME"
+        ;;
+    include)
+        reprepro --confdir "$CONFDIR" includedeb "$CODENAME" "$DEB"
+        reprepro --confdir "$CONFDIR" export "$CODENAME"
+        ;;
+esac
 
 # 3. diff 出新增/修改文件 (path 与 checksum 任一变化即视为变化)
 AFTER=$(find dists pool -type f -exec md5sum {} + 2>/dev/null | sort || true)
@@ -84,7 +127,17 @@ curl -fsS -X POST "$WORKER_URL/api/invalidate?suite=$CODENAME" \
 unset GPG_PASSPHRASE
 unset ADMIN_PUSH_TOKEN
 
-PKG_NAME=$(basename "$DEB" | sed 's/_.*//')
 echo ""
-echo "✓ 已推送: $DEB → $CODENAME"
-echo "  安装: sudo apt update && sudo apt install $PKG_NAME"
+case "$MODE" in
+    include)
+        PKG_NAME=$(basename "$DEB" | sed 's/_.*//')
+        echo "✓ 已推送: $DEB → $CODENAME"
+        echo "  安装: sudo apt update && sudo apt install $PKG_NAME"
+        ;;
+    remove)
+        echo "✓ 已从 $CODENAME 移除并推送签名: $REMOVE_PKG"
+        ;;
+    sync)
+        echo "✓ 已同步并推送签名: $CODENAME"
+        ;;
+esac
