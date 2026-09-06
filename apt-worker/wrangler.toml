@@ -2,6 +2,11 @@ name = "cloud-apt-worker"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
+# Cloudflare 在 wrangler deploy 时自动运行, 把 apt-client 构到 apt-worker/dist/
+# (Cloudflare Git 导入的 Build command 必须留空, 由本 [build] 接管)
+[build]
+command = "npm --prefix ../apt-client install --no-audit --prefer-offline && npm --prefix ../apt-client run build -- --outDir ../apt-worker/dist --emptyOutDir"
+
 [assets]
 binding = "ASSETS"
 directory = "./dist"

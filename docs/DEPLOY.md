@@ -16,8 +16,23 @@
 4. Connect to Git → 选 fork 仓库
 5. **Build settings**:
    - Root directory: `apt-worker`
-   - Build command: 留空
+   - **Build command: 留空** ← 必须留空, 由 `wrangler.toml` 的 `[build]` 段接管前端构建 (见下方说明)
 6. Deploy
+
+> **为什么 Build command 留空？**
+>
+> `apt-worker/wrangler.toml` 已包含一个 `[build]` 段:
+> ```toml
+> [build]
+> command = "npm --prefix ../apt-client install --no-audit --prefer-offline && npm --prefix ../apt-client run build -- --outDir ../apt-worker/dist --emptyOutDir"
+> ```
+> Cloudflare 会在 `wrangler deploy` 之前自动运行这段命令, 把 Vue 前端构建到 `apt-worker/dist/`, 供 `[assets]` 段读取。
+>
+> 如果在 Dashboard 填写 Build command, 会和 `[build]` 段冲突, 导致 `apt-worker/dist` 不存在, 报:
+> ```
+> ✘ [ERROR] The directory specified by the "assets.directory" field in your configuration file does not exist:
+>     /opt/buildhome/repo/apt-worker/dist
+> ```
 
 ### 步骤 3: 绑定资源 (首次部署)
 
@@ -117,6 +132,10 @@ sudo apt update && sudo apt install myapp
 
 - 确认 wrangler.toml 的 `[assets]` 配置存在
 - 确认 build 流程执行了 (`apt-worker/dist/` 有文件)
+
+### Cloudflare 构建报 `apt-worker/dist does not exist`
+
+Cloudflare Dashboard 的 Build command 必须**留空**, 让 `wrangler.toml` 的 `[build]` 段执行前端构建。如果填了 `npm run build` 等命令, 会和 `[build]` 段冲突, `apt-worker/dist` 不会被创建。
 
 ## 附录: 轮换 ADMIN_PUSH_TOKEN (泄露时)
 
