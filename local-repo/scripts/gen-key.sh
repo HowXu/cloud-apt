@@ -78,12 +78,24 @@ FPR=$FPR
 EOF
 chmod 600 "$KEY_DIR/keyid.txt"
 
-# 同步更新 conf/distributions 的 SignWith
+# 同步更新 conf/distributions 的 SignWith.
+# 之前会被静默跳过 (conf/distributions 不存在时), 留一个 __GPG_EMAIL__
+# 占位符让 build-and-push.sh 后面 fail, 用户摸不着头脑.
 DIST_FILE="$REPO_ROOT/conf/distributions"
-if [[ -f "$DIST_FILE" ]]; then
-    sed -i "s|SignWith:.*|SignWith: $GPG_EMAIL|" "$DIST_FILE"
-    echo "  ✓ 已更新 $DIST_FILE 的 SignWith"
+if [[ ! -f "$DIST_FILE" ]]; then
+    echo "✗ $DIST_FILE 不存在" >&2
+    echo "  请先跑 ./local-repo/scripts/setup-reprepro.sh 初始化仓库结构" >&2
+    exit 1
 fi
+sed -i "s|SignWith:.*|SignWith: $GPG_EMAIL|" "$DIST_FILE"
+
+# 校验替换真的生效 (防御 sed 静默失败 + 模板格式漂移)
+if grep -q '^SignWith:.*__GPG_EMAIL__' "$DIST_FILE"; then
+    echo "✗ SignWith 替换失败, 仍是占位符" >&2
+    echo "  模板格式可能已变, 需要手动检查 $DIST_FILE" >&2
+    exit 1
+fi
+echo "  ✓ 已更新 $DIST_FILE 的 SignWith"
 
 echo ""
 echo "✓ 密钥生成完成"
