@@ -1,6 +1,7 @@
 import type { Bindings, PackageEntry } from './env';
 import { getCachedIndex, setCachedIndex } from './cache';
 import { parsePackages } from './parser';
+import { validateSuite } from './shared/path';
 
 const ARCHS = ['amd64', 'arm64'] as const;
 type Arch = typeof ARCHS[number];
@@ -27,6 +28,9 @@ async function loadIndex(env: Bindings, suite: string, arch: Arch): Promise<Pack
 }
 
 export async function handleIndex(suite: string, arch: string, env: Bindings): Promise<Response> {
+    if (!validateSuite(suite)) {
+        return new Response('Invalid suite', { status: 400 });
+    }
     if (!ARCHS.includes(arch as Arch)) {
         return new Response('Invalid arch', { status: 400 });
     }
@@ -40,6 +44,9 @@ export async function handleSearch(
     query: string,
     env: Bindings
 ): Promise<Response> {
+    if (!validateSuite(suite)) {
+        return new Response('Invalid suite', { status: 400 });
+    }
     if (!ARCHS.includes(arch as Arch)) {
         return new Response('Invalid arch', { status: 400 });
     }

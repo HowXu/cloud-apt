@@ -130,6 +130,15 @@ curl -fsSL https://<your-domain>/install.sh | sudo bash
 sudo apt update && sudo apt install myapp
 ```
 
+`/uninstall.sh` (symmetric counterpart of `install.sh`, also served as plain text):
+
+```bash
+curl -fsSL https://<your-domain>/uninstall.sh | sudo bash
+# 可选: 同时卸载从此仓库装的包
+curl -fsSL https://<your-domain>/uninstall.sh | sudo CLOUD_APT_PURGE=myapp bash
+curl -fsSL https://<your-domain>/uninstall.sh | sudo CLOUD_APT_PURGE=all bash
+```
+
 ## 迁移到新机器
 
 打包整个 `~/cloud-apt/` (keys, conf, db, pool, dists) 成可迁移压缩包, 在新机器导入:

@@ -26,6 +26,7 @@ local-repo/scripts/*.sh.bak
 # Example package build outputs
 example/artifacts/
 example/hello
+example/cloud-apt-hello
 
 # OS / Editor
 .DS_Store

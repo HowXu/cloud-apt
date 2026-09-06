@@ -76,6 +76,16 @@ describe('handleIndex', () => {
         expect(json.packages).toHaveLength(2);
         expect(json.packages[0].Package).toBe('foo');
     });
+
+    it('returns 400 on invalid suite', async () => {
+        const env: any = {
+            APT_BUCKET: mockR2({}),
+            APT_KV: { get: vi.fn(async () => null), put: vi.fn(), delete: vi.fn() },
+        };
+        const r = await handleIndex('foo bar', 'amd64', env);
+        expect(r.status).toBe(400);
+        expect(await r.text()).toBe('Invalid suite');
+    });
 });
 
 describe('handleSearch', () => {

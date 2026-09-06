@@ -1,6 +1,12 @@
 export const ALLOWED_PREFIXES = ['dists/', 'pool/'];
 export const ALLOWED_EXACT = ['pubkey.asc', 'scripts/install.sh', 'scripts/uninstall.sh'];
 
+const SUITE_RE = /^[a-z0-9][a-z0-9.+~-]{0,63}$/;
+
+export function validateSuite(s: string): boolean {
+    return typeof s === 'string' && SUITE_RE.test(s);
+}
+
 function isPathSafe(p: string): boolean {
     if (!p) return false;
     if (p.startsWith('/')) return false;

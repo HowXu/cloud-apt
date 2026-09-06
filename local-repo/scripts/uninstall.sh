@@ -23,13 +23,13 @@ if [[ -n "${CLOUD_APT_PURGE:-}" ]]; then
         echo "  找出从此仓库安装的所有包..."
         # 检查 sources 是否还在 (如果已删, 我们没法知道来源, 所以跳过)
         if [[ -f "$SRC_DEB822" || -f "$SRC_ONELINE" ]]; then
-            PKGS=$(dpkg-query -W -f='${Package}\n' 2>/dev/null | while read -r p; do
+            mapfile -t PKGS < <(dpkg-query -W -f='${Package}\n' 2>/dev/null | while read -r p; do
                 if apt-cache show "$p" 2>/dev/null | grep -q '^Origin: cloud-apt$'; then
                     echo "$p"
                 fi
             done || true)
-            if [[ -n "$PKGS" ]]; then
-                echo "  候选卸载包: $PKGS"
+            if [[ ${#PKGS[@]} -gt 0 ]]; then
+                echo "  候选卸载包: ${PKGS[*]}"
                 if [[ "${YES:-}" != "1" ]]; then
                     read -rp "Confirm purge? [y/N] " ans
                     if [[ ! "$ans" =~ ^[Yy]$ ]]; then
@@ -37,8 +37,7 @@ if [[ -n "${CLOUD_APT_PURGE:-}" ]]; then
                         exit 1
                     fi
                 fi
-                # shellcheck disable=SC2086
-                sudo apt purge -y $PKGS
+                sudo apt purge -y "${PKGS[@]}"
             else
                 echo "  没找到任何 cloud-apt 来源的包"
             fi
