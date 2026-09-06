@@ -28,6 +28,21 @@ if [[ -z "$GPG_EMAIL" ]]; then
     echo "✗ 邮箱不能为空" >&2
     exit 1
 fi
+
+# 防多 key 冲突: 如果 keyring 已经有该邮箱的私钥, 拒绝再次生成.
+# (reprepro 默认用最新一把签 InRelease, push-key.sh 用第一把导出 pubkey,
+#  两把不一致 → 客户端 apt update 报 "Missing key ...")
+EXISTING=$(gpg --list-secret-keys --with-colons "$GPG_EMAIL" 2>/dev/null \
+    | awk -F: '/^fpr:/ {print $10}' || true)
+if [[ -n "$EXISTING" ]]; then
+    echo "✗ keyring 已经有 <$GPG_EMAIL> 的私钥:" >&2
+    echo "$EXISTING" | sed 's/^/    /' >&2
+    echo "  如要重新生成, 先手动删除全部:" >&2
+    echo "    for fpr in $EXISTING; do gpg --batch --yes --delete-secret-keys \"\$fpr\"; done" >&2
+    echo "  然后重跑本脚本. (避免 'push 用 #1, 签用 #N' 的密钥错位)" >&2
+    exit 1
+fi
+
 export GPG_PASSPHRASE
 
 mkdir -p "$KEY_DIR"
