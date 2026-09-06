@@ -4,12 +4,14 @@ import { proxyR2 } from './proxy';
 import { handleUpload } from './upload';
 import { handleIndex, handleSearch } from './api-index';
 import { invalidate } from './cache';
-import { checkAuth } from './shared/auth';
+import { checkAuth, authDebug } from './shared/auth';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.post('/api/invalidate', async (c) => {
-    if (!checkAuth(c.req.raw, c.env)) return c.text('Unauthorized', 401);
+    if (!checkAuth(c.req.raw, c.env)) {
+        return c.json({ error: 'Unauthorized', ...authDebug(c.req.raw, c.env) }, 401);
+    }
     const suite = c.req.query('suite');
     if (!suite) return c.text('Missing suite', 400);
     await invalidate(c.env, suite);

@@ -1,5 +1,5 @@
 import type { Bindings } from './env';
-import { checkAuth } from './shared/auth';
+import { checkAuth, authDebug } from './shared/auth';
 import { validateUploadPath } from './shared/path';
 
 export async function handleUpload(req: Request, env: Bindings): Promise<Response> {
@@ -8,7 +8,8 @@ export async function handleUpload(req: Request, env: Bindings): Promise<Respons
     }
 
     if (!checkAuth(req, env)) {
-        return new Response('Unauthorized', { status: 401 });
+        // dev 排查: 401 响应体里返回 token/presented/mismatch, 生产部署前必须改回 'Unauthorized'
+        return Response.json({ error: 'Unauthorized', ...authDebug(req, env) }, { status: 401 });
     }
 
     const url = new URL(req.url);
