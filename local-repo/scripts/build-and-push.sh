@@ -19,14 +19,24 @@ trap 'shred -u "$_CURL_CONF" 2>/dev/null; rm -f "$_CURL_CONF"; unset ADMIN_PUSH_
 
 export GPG_PASSPHRASE
 
+# 防御: 显式确认 conf/distributions 存在, 不依赖 'cd + 相对路径' 默认值
+if [[ ! -f "$REPO_ROOT/conf/distributions" ]]; then
+    echo "✗ $REPO_ROOT/conf/distributions 不存在" >&2
+    echo "  请先跑 ./local-repo/scripts/setup-reprepro.sh + gen-key.sh" >&2
+    exit 1
+fi
+
+CONFDIR="$REPO_ROOT/conf"
+
 cd "$REPO_ROOT"
 
 # 1. 记下推送前的文件列表 (path + checksum)
 BEFORE=$(find dists pool -type f -exec md5sum {} + 2>/dev/null | sort || true)
 
-# 2. reprepro 吸收 + 重新签名
-reprepro includedeb "$CODENAME" "$DEB"
-reprepro export "$CODENAME"
+# 2. reprepro 吸收 + 重新签名. --confdir 显式指明配置目录,
+#    即使将来脚本从其他 CWD 调用也不会去找 ./conf/distributions.
+reprepro --confdir "$CONFDIR" includedeb "$CODENAME" "$DEB"
+reprepro --confdir "$CONFDIR" export "$CODENAME"
 
 # 3. diff 出新增/修改文件 (path 与 checksum 任一变化即视为变化)
 AFTER=$(find dists pool -type f -exec md5sum {} + 2>/dev/null | sort || true)
