@@ -1,5 +1,5 @@
-const ALLOWED_PREFIXES = ['dists/', 'pool/'];
-const ALLOWED_EXACT = ['pubkey.asc', 'scripts/install.sh'];
+export const ALLOWED_PREFIXES = ['dists/', 'pool/'];
+export const ALLOWED_EXACT = ['pubkey.asc', 'scripts/install.sh'];
 
 function isPathSafe(p: string): boolean {
     if (!p) return false;
