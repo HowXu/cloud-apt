@@ -97,39 +97,18 @@ DNS auto-configures CNAME → Worker.
 ```bash
 git clone https://github.com/<you>/cloud-apt
 cd cloud-apt
-
-# 1. Generate GPG key
-read -rs GPG_PASSPHRASE && export GPG_PASSPHRASE
-./local-repo/scripts/gen-key.sh
-unset GPG_PASSPHRASE
-
-# 2. Initialize ~/cloud-apt
-./local-repo/scripts/setup-reprepro.sh
-
-# 3. Push the public key to the Worker
-export WORKER_URL=https://apt.example.com
-export ADMIN_PUSH_TOKEN=<your-secret>
-./local-repo/scripts/push-key.sh
-
-# 4. Push the client install script
-./local-repo/scripts/push-install.sh
+./local-repo/scripts/init.sh
 ```
+
+`init.sh` prompts for the Worker URL, push token, and GPG passphrase, then provisions the local repo structure, GPG key, and uploads the public key plus the client install script.
 
 ## Pushing .deb Packages
 
 ```bash
-# Build (containerized)
-podman build -t cloud-apt-build:kali-rolling -f local-repo/dockerfiles/Dockerfile.kali-rolling .
-podman run --rm -v "$PWD":/src cloud-apt-build:kali-rolling \
-    bash -c 'dpkg-buildpackage -us -uc -b'
-
-# Push
-export WORKER_URL=https://apt.example.com
-export ADMIN_PUSH_TOKEN=<your-secret>
-read -rs GPG_PASSPHRASE && export GPG_PASSPHRASE
-./local-repo/scripts/build-and-push.sh ../myapp_1.0_amd64.deb
-unset GPG_PASSPHRASE
+./local-repo/scripts/push.sh ../myapp_1.0_amd64.deb
 ```
+
+`push.sh` prompts for the GPG passphrase, signs locally, regenerates the index, and uploads only the changed files.
 
 ## Client Usage
 
