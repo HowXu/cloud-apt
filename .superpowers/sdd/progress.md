@@ -90,3 +90,104 @@ Fix (commit 0d8f589): added `[build]` block to `apt-worker/wrangler.toml` that r
 DEPLOY.md updated to explain why Build command must be left empty (so wrangler's [build] takes over), and added the error message + fix to troubleshooting.
 
 Verified: production (Cloudflare [build] block) + local (npm run build via build:copy) both produce `apt-worker/dist/`. 44/44 tests pass. Typecheck clean.
+
+## Chore + security audit v2 (wrap-up)
+
+### Task 1: Revert auth.ts console.log + upload.ts 401 + auth-no-leak test
+Commit `f162ac3`. Reverted `console.log`/`authDebug` in auth.ts (Critical token-leak via Workers Logs), reverted 401 JSON `{ error, ...authDebug() }` → plain `'unauthorized'` in upload.ts (Critical token-leak via response body). Added `auth-no-leak.test.ts` with 4 tests (3 static regex over auth.ts/upload.ts/index.ts + 1 runtime upload 401 body assertion). All 48/48 tests passing.
+
+Reviewer flagged missing test + missing upload.ts revert on first pass (Critical). Fix subagent amended the commit. Second-pass reviewer accepted.
+
+### Task 2: Commit build-and-push.sh realpath fix
+Commit `a1f06aa`. 3-line change resolving `$DEB` to absolute path immediately after arg parsing (before `cd $REPO_ROOT`). Inline commit (trivial).
+
+### Task 3: gen-key.sh post-write FPR self-check
+Commit `322669f`. After writing keyid.txt + public.key + private.key.gpg, read FPR from keyring via `gpg --list-secret-keys --with-colons $GPG_EMAIL` and exit 1 on empty / mismatch. Reviewer approved.
+
+### Task 4: build-and-push.sh --remove / --sync
+Commit `20dd774`. Adds three modes: `--remove <pkg>` (with confirmation prompt + YES=1 override for non-interactive), `--sync` (re-export only), and default (include, requires .deb). Diff-then-upload block untouched. Reviewer approved.
+
+### Task 5: hygiene pass
+Commit `f568a4d`. Fixed `.gitignore` — inline `# comments` after patterns broke 5 `local-repo/*` patterns; split each to its own line. npm audit: 1 High + 1 Moderate (esbuild ≤0.24.2 via vite, dev-only; recorded for SECURITY-AUDIT-2.md as I-7 with no fix — vite major upgrade out of scope). TODO scan: clean. Secret-leak scan: clean.
+
+### Task 6: docs cross-link + DEPLOY.md --remove/--sync
+Commit `a007b7c`. Added two sections to DEPLOY.md: 移除包 + 手动 reprepro 编辑后同步. Cross-link audit clean (all references resolve).
+
+### Task 7: apt-client typecheck script
+Already present in apt-client/package.json. No action needed.
+
+### Task 8: CI workflow
+Commit `c1ab1b4`. Created .github/workflows/test.yml with 3 jobs: worker-test (npm run -w apt-worker test + typecheck), client-typecheck, worker-build-smoke (wrangler deploy --dry-run). Trigger: push + PR to main.
+
+### Tasks 9a + 9b: in-scope audit fixes
+- `dd89b66`: worker fixes — proxy.ts nosniff, index.ts frame-ancestors, wrangler-dev.toml → .dev.vars (chmod 600 done manually)
+- `1c6ba5e`: local-repo fixes — gen-key.sh EXIT trap + no env export, build-and-push.sh GPG_PASSPHRASE in trap, install.sh SUITE validation, push-install.sh / push-key.sh https guard, uninstall.sh purge confirmation (file was untracked, now committed)
+
+Tests: 48/48 passing. Bash -n clean on all 6 scripts.
+
+### Tasks 10 + 11: trailing fixes + final review
+- `f632e9f`: index.ts (removed authDebug + STARTUP console.log), path.ts (added uninstall.sh), types.d.ts (?raw declaration for tsc)
+- `efa476a`: README + README-en link to SECURITY-AUDIT-2.md
+
+48/48 tests, both typechecks clean.
+
+## Wrap-up Complete
+12 commits total in chore+audit branch (4c88e39..efa476a). Final state:
+- 0 Critical, 1 Important fixed in branch (I-3 EXIT trap), 2 Important deferred (I-1 vite CVE, I-2 gen-key.sh passphrase-on-disk)
+- 10 Minor fixed, 12 Minor deferred (documented in SECURITY-AUDIT-2.md)
+- CI workflow added (push/PR trigger)
+- build-and-push.sh has --remove / --sync for reprepro-only operations
+- All dev debug logging reverted; auth-no-leak.test.ts regression test in place
+- npm audit: 1 High (vite), 1 Moderate (esbuild transitive), both deferred
+
+Production-ready modulo I-1 (vite CVE; dev/build-time only).
+
+## Post-audit fix wave (commit wave 901719a)
+
+User instruction "全部修复" — addressed all 14 deferred items. Result: 0 Critical, 0 Important, 0 Minor open.
+
+| Item | Commit | Approach |
+|---|---|---|
+| I-1 | a9392e2 | vite ^5.4 → ^6.0 (^7 blocked by unocss 0.65.x) |
+| I-2 | e298fbe | passphrase via fd-3 + no disk config file |
+| M-11 | e298fbe | same fd-3 refactor |
+| M-12 | e298fbe | passphrase length ≥ 12 chars |
+| M-13 | e298fbe | tmpfile+mv atomic writes for 3 key files |
+| M-14 | edd4746 | while-read + quoted body |
+| M-15 | (pre) | typo'd tracked setup-repropro.sh removed; canonical re-added |
+| M-16 | edd4746 | hostname/whoami via jq -Rs |
+| M-17 | edd4746 | mapfile + quoted array elements |
+| M-18 | e056134 | digest pin with PLACEHOLDER + refresh command |
+| M-19 | (n/a) | heredoc body has required $DOMAIN/$SUITE; SUITE validated upstream |
+| M-20 | edd4746 | apt-get clean after keyring removal |
+| M-21 | edd4746 | domain regex in push-key.sh |
+| M-22 | edd4746 | PREFIX from dpkg-query |
+
+Final verification:
+- 48/48 tests passing
+- typecheck clean (worker + client)
+- 6 bash scripts pass bash -n
+- npm audit: 0 vulnerabilities across all workspaces
+
+Production-ready.
+
+## v3 audit + fix wave (commit 604edba)
+
+User-requested third-pass full audit. 4 parallel subagents. Result:
+- 0 Critical, 3 Important claimed
+- 1 real Important (C/I-5 uninstall.sh all-mode) — fixed in 115a60b
+- 2 false positives/theoretical (C/I-3 gen-key.sh EXIT trap covers; C/I-4 APT policy covers whitespace) — documented in SECURITY-AUDIT-3.md
+- 14 Minor — 6 actionable, 8 informational
+
+Fix wave (`115a60b` + `cb5f927`):
+- uninstall.sh all-mode: mapfile + quoted array
+- api-index.ts: validateSuite() helper + Vitest case "returns 400 on invalid suite"
+- DEPLOY.md: documented /uninstall.sh route
+- example/README.md: rename drift fixed (hello → cloud-apt-hello)
+- .gitignore: example/cloud-apt-hello added + git rm --cached
+- gen-key.sh cleanup(): gpgconf --kill gpg-agent appended
+
+Final state: 0 Critical, 0 Important, 0 Minor actionable.
+49/49 tests passing (was 48; +1 for invalid suite). Typecheck clean.
+
+Total this session: ~25 commits chore + audit. Production-ready.

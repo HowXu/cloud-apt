@@ -7,19 +7,19 @@ apt-client/dist/
 # Tests
 coverage/
 
-# Local repo runtime data (在项目内 local-repo/ 下, 不污染 $HOME)
-# conf/distributions.template 是模板 (git 跟踪)
-# conf/distributions 是用户运行 gen-key.sh 后的 live 副本 (gitignore)
+# Local repo runtime data
+# conf/distributions.template 模板
+# conf/distributions live 副本
 local-repo/conf/distributions
-# GPG 私钥, 绝不入仓
+# GPG
 local-repo/keys/
 # reprepro SQLite
 local-repo/db/
-# 上传的 .deb
+# .deb
 local-repo/pool/
-# 签名的 Release/Packages
+# Release/Packages
 local-repo/dists/
-# 临时入站
+# temprary
 local-repo/incoming/
 local-repo/scripts/*.sh.bak
 
@@ -38,3 +38,6 @@ example/cloud-apt-hello
 *.env
 .env
 apt-worker/.dev.vars
+
+.superpowers/*
+docs/*
