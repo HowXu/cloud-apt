@@ -92,6 +92,8 @@ Worker → **Triggers** → **Custom Domains** → 添加 `apt.example.com`。
 
 DNS 自动配置 CNAME → Worker。
 
+完整部署 + 故障排查 + Token 轮换 + 安全附录见 [docs/DEPLOY.md](docs/DEPLOY.md)。
+
 ## 本地初始化
 
 ```bash
@@ -137,8 +139,10 @@ npm run build
 
 ## 安全审计
 
-- v1: [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md)
-- v2: [docs/SECURITY-AUDIT-2.md](docs/SECURITY-AUDIT-2.md)
+审计记录通过 GitHub 历史 commit 保留, 请到仓库的 `docs/` 目录对应 commit 查阅:
+- v1: <https://github.com/<you>/cloud-apt/blob/5fb037a/docs/SECURITY-AUDIT.md>
+- v2: <https://github.com/<you>/cloud-apt/blob/d05e437/docs/SECURITY-AUDIT-2.md>
+- v3: <https://github.com/<you>/cloud-apt/blob/0314f08/docs/SECURITY-AUDIT-3.md>
 
 ## 许可证
 

@@ -92,6 +92,8 @@ Worker → **Triggers** → **Custom Domains** → add `apt.example.com`.
 
 DNS auto-configures CNAME → Worker.
 
+Full deployment, troubleshooting, token rotation, and security appendix: [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## Local Initialization
 
 ```bash
@@ -137,8 +139,10 @@ npm run build
 
 ## Security Audits
 
-- v1: [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md)
-- v2: [docs/SECURITY-AUDIT-2.md](docs/SECURITY-AUDIT-2.md)
+Audit notes live in the repository's `docs/` directory at specific commits:
+- v1: <https://github.com/<you>/cloud-apt/blob/5fb037a/docs/SECURITY-AUDIT.md>
+- v2: <https://github.com/<you>/cloud-apt/blob/d05e437/docs/SECURITY-AUDIT-2.md>
+- v3: <https://github.com/<you>/cloud-apt/blob/0314f08/docs/SECURITY-AUDIT-3.md>
 
 ## License
 
