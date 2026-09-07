@@ -2,7 +2,7 @@
 #include <string.h>
 
 #define HELLO_VERSION "0.2.0"
-#define HELLO_REPO    "https://cloud-apt.howxu366.workers.dev"
+#define HELLO_REPO    "https://deb.howxu.cn"
 
 static void usage(const char *prog) {
     fprintf(stderr,

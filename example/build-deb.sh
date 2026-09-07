@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Build cloud-apt-hello-0.2.0 .deb locally (no act/podman needed).
-# 输出: ./artifacts/cloud-apt-hello_0.2.0-1_amd64.deb
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -17,14 +15,12 @@ mkdir -p "$ARTIFACTS"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
-# 1. 构建
 make clean
 make
 
-# 2. 安装到 staging
 make install "DESTDIR=$STAGE" "PREFIX=$PREFIX"
 
-# 3. DEBIAN 元数据
+
 mkdir -p "$STAGE/DEBIAN"
 cp debian/control     "$STAGE/DEBIAN/control"
 cp debian/copyright   "$STAGE/DEBIAN/copyright"
@@ -37,8 +33,6 @@ chmod 755 "$STAGE/DEBIAN/prerm"
 
 echo '2.0' > "$STAGE/DEBIAN/debian-binary"
 
-# 4. 打包. --root-owner-group 把所有 entry 的属主重写为 root:root,
-#    不需要 (也不应该) 提前 chown -R 0:0 — 非 root 用户跑会直接报错.
 DEB="${ARTIFACTS}/${PKG}_${VERSION}-${RELEASE}_${ARCH}.deb"
 dpkg-deb -Zgzip -z9 --root-owner-group --uniform-compression \
     --build "$STAGE" "$DEB"
