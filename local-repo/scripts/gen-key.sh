@@ -6,6 +6,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR}"
 KEY_DIR="$REPO_ROOT/keys"
 
+# M-3: keys/ 部分文件 (例如仅 public.key, 缺 private.key.gpg) 是损坏状态.
+# 此时直接生成新密钥会与现存材料不一致, 必须显式拒绝, 由用户决定
+# 备份/清理策略. 仅在 keys/ 完全空或三件套齐全时才继续.
+EXISTING_KEYS=()
+[[ -s "$KEY_DIR/public.key" ]]     && EXISTING_KEYS+=("public.key")
+[[ -s "$KEY_DIR/private.key.gpg" ]] && EXISTING_KEYS+=("private.key.gpg")
+[[ -s "$KEY_DIR/keyid.txt" ]]       && EXISTING_KEYS+=("keyid.txt")
+if [[ "${#EXISTING_KEYS[@]}" -gt 0 && "${#EXISTING_KEYS[@]}" -ne 3 ]]; then
+    echo "✗ $KEY_DIR 已存在部分密钥文件: ${EXISTING_KEYS[*]}" >&2
+    echo "  这是损坏状态 (三件套必须齐全或全空)。" >&2
+    echo "  若要保留现有材料, 请勿重跑本脚本;" >&2
+    echo "  若要彻底重生成, 先备份后删除:" >&2
+    echo "    mkdir -p $KEY_DIR.bak && mv $KEY_DIR/*.key* $KEY_DIR/keyid.txt $KEY_DIR.bak/" >&2
+    exit 1
+fi
+
 echo "→ GPG 密钥生成 (ed25519, 2 年过期)"
 echo ""
 

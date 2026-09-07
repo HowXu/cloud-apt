@@ -45,7 +45,12 @@ if [[ -z "$ADMIN_PUSH_TOKEN" ]]; then
     while :; do
         read -rsp "ADMIN_PUSH_TOKEN (Worker Secret 值): " ADMIN_PUSH_TOKEN; echo
         [[ -n "$ADMIN_PUSH_TOKEN" ]] || { warn "Token 不能为空"; continue; }
-        break
+        if curl -fsS -o /dev/null \
+            -H "Authorization: Bearer $ADMIN_PUSH_TOKEN" \
+            "$WORKER_URL/api/status/health"; then
+            break
+        fi
+        warn "Token 被 Worker 拒绝 (401/403), 请重新输入"
     done
 fi
 
@@ -61,8 +66,7 @@ have_full_key=0
 [[ -s "$KEY_DIR/public.key" && -s "$KEY_DIR/private.key.gpg" && -s "$KEY_DIR/keyid.txt" ]] && have_full_key=1
 
 if [[ "$have_full_key" -eq 0 ]]; then
-    info "生成 GPG 密钥"
-    export GPG_PASSPHRASE=""
+    info "生成 GPG 密钥 (gen-key.sh 会交互询问 passphrase)"
     "$SCRIPT_DIR/gen-key.sh"
 else
     info "复用已有 GPG 密钥: $(awk -F= '$1=="FPR"{print $2}' "$KEY_DIR/keyid.txt")"
