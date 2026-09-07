@@ -97,39 +97,18 @@ DNS 自动配置 CNAME → Worker。
 ```bash
 git clone https://github.com/<you>/cloud-apt
 cd cloud-apt
-
-# 1. 生成 GPG 密钥
-read -rs GPG_PASSPHRASE && export GPG_PASSPHRASE
-./local-repo/scripts/gen-key.sh
-unset GPG_PASSPHRASE
-
-# 2. 初始化 ~/cloud-apt
-./local-repo/scripts/setup-reprepro.sh
-
-# 3. 推送公钥到 Worker
-export WORKER_URL=https://apt.example.com
-export ADMIN_PUSH_TOKEN=<your-secret>
-./local-repo/scripts/push-key.sh
-
-# 4. 推送客户端脚本
-./local-repo/scripts/push-install.sh
+./local-repo/scripts/init.sh
 ```
+
+`init.sh` 会交互询问 Worker URL、上传 Token 和 GPG passphrase, 然后完成本地仓库结构、密钥生成、公钥与客户端脚本上传。
 
 ## 推送 .deb 包
 
 ```bash
-# 编译 (容器化)
-podman build -t cloud-apt-build:kali-rolling -f local-repo/dockerfiles/Dockerfile.kali-rolling .
-podman run --rm -v "$PWD":/src cloud-apt-build:kali-rolling \
-    bash -c 'dpkg-buildpackage -us -uc -b'
-
-# 推送
-export WORKER_URL=https://apt.example.com
-export ADMIN_PUSH_TOKEN=<your-secret>
-read -rs GPG_PASSPHRASE && export GPG_PASSPHRASE
-./local-repo/scripts/build-and-push.sh ../myapp_1.0_amd64.deb
-unset GPG_PASSPHRASE
+./local-repo/scripts/push.sh ../myapp_1.0_amd64.deb
 ```
+
+`push.sh` 会临时提示输入 GPG passphrase, 之后自动完成本地签名、索引生成、变更上传和缓存失效。
 
 ## 客户端使用
 
