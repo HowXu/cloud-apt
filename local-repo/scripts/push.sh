@@ -18,7 +18,9 @@ CODENAME="${2:-kali-rolling}"
 load_config || die "未找到 $CONFIG_PATH, 请先运行 init.sh"
 export WORKER_URL ADMIN_PUSH_TOKEN
 
-# GPG passphrase 不写入 config.env, 进程内 export 后由 build-and-push.sh 的 trap 清理
+trap 'unset GPG_PASSPHRASE' EXIT
+
+# GPG passphrase 不写入 config.env, 由退出 trap 清理
 while :; do
     read -rsp "GPG passphrase: " GPG_PASSPHRASE; echo
     [[ -n "$GPG_PASSPHRASE" ]] || { warn "passphrase 不能为空"; continue; }
