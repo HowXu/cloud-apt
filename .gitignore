@@ -41,3 +41,4 @@ apt-worker/.dev.vars
 
 .superpowers/*
 docs/*
+AGENTS.md
