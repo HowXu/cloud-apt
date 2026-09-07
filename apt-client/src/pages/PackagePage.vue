@@ -31,7 +31,7 @@
             <td class="px-3 py-2 font-mono text-sm">{{ v.Architecture }}</td>
             <td class="px-3 py-2">{{ formatSize(v.Size) }}</td>
             <td class="px-3 py-2">
-              <a :href="`/${v.Filename}`" class="text-accent no-underline hover:underline">↓ download</a>
+              <a :href="`/${v.Filename}`" class="text-accent no-underline hover:underline" download>Download .deb</a>
             </td>
           </tr>
         </tbody>
