@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# 一次性: 生成 GPG 密钥对 (ed25519, 2 年过期)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR}"
 KEY_DIR="$REPO_ROOT/keys"
 
-# M-3: keys/ 部分文件 (例如仅 public.key, 缺 private.key.gpg) 是损坏状态.
-# 此时直接生成新密钥会与现存材料不一致, 必须显式拒绝, 由用户决定
-# 备份/清理策略. 仅在 keys/ 完全空或三件套齐全时才继续.
 EXISTING_KEYS=()
 [[ -s "$KEY_DIR/public.key" ]]     && EXISTING_KEYS+=("public.key")
 [[ -s "$KEY_DIR/private.key.gpg" ]] && EXISTING_KEYS+=("private.key.gpg")
