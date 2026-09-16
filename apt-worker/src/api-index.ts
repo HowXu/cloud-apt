@@ -8,25 +8,30 @@ const ARCHS = ['amd64', 'arm64'] as const;
 type Arch = typeof ARCHS[number];
 
 async function loadIndex(env: Bindings, suite: string, arch: Arch): Promise<PackageEntry[]> {
-    const bucket = env.APT_BUCKET;
-    if (!bucket) return [];
+    try {
+        const bucket = env.APT_BUCKET;
+        if (!bucket) return [];
 
-    const obj = await bucket.get(await resolveIndexKey(bucket, `dists/${suite}/main/binary-${arch}/Packages.gz`));
-    if (!obj) return [];
+        const obj = await bucket.get(await resolveIndexKey(bucket, `dists/${suite}/main/binary-${arch}/Packages.gz`));
+        if (!obj) return [];
 
-    const etag = obj.httpEtag;
-    const cached = await getCachedIndex(env, suite, arch);
-    if (cached && cached.etag === etag) {
-        await obj.body?.cancel();
-        return cached.entries;
+        const etag = obj.httpEtag;
+        const cached = await getCachedIndex(env, suite, arch);
+        if (cached && cached.etag === etag) {
+            await obj.body?.cancel();
+            return cached.entries;
+        }
+
+        // Decompress gzip
+        const stream = new Response(obj.body).body!.pipeThrough(new DecompressionStream('gzip'));
+        const text = await new Response(stream).text();
+        const entries = parsePackages(text);
+        await setCachedIndex(env, suite, arch, { etag, entries });
+        return entries;
+    } catch (e) {
+        console.error(`loadIndex(${suite}, ${arch}) failed:`, e);
+        return [];
     }
-
-    // Decompress gzip
-    const stream = new Response(obj.body).body!.pipeThrough(new DecompressionStream('gzip'));
-    const text = await new Response(stream).text();
-    const entries = parsePackages(text);
-    await setCachedIndex(env, suite, arch, { etag, entries });
-    return entries;
 }
 
 export async function handleIndex(suite: string, arch: string, env: Bindings): Promise<Response> {

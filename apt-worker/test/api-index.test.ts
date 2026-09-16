@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, test } from 'vitest';
 import { handleIndex, handleSearch } from '../src/api-index';
+import type { Bindings } from '../src/env';
 
 const mockR2 = (files: Record<string, string>) => ({
     get: vi.fn(async (key: string) => {
@@ -101,4 +102,26 @@ describe('handleSearch', () => {
         expect(json.packages.length).toBeGreaterThan(0);
         expect(json.packages.every((p: any) => p.Package.toLowerCase().includes('foo') || (p.Description || '').toLowerCase().includes('foo'))).toBe(true);
     });
+});
+
+test('handleIndex returns empty array when R2 get throws', async () => {
+    const env = {
+        APT_BUCKET: {
+            get: () => { throw new Error('simulated R2 outage'); },
+        },
+    } as unknown as Bindings;
+    const r = await handleIndex('kali-rolling', 'amd64', env);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ packages: [] });
+});
+
+test('handleSearch returns empty array when R2 get throws', async () => {
+    const env = {
+        APT_BUCKET: {
+            get: () => { throw new Error('simulated R2 outage'); },
+        },
+    } as unknown as Bindings;
+    const r = await handleSearch('kali-rolling', 'amd64', 'hello', env);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ packages: [] });
 });
