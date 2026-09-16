@@ -83,8 +83,13 @@ cd cloud-apt
 ./local-repo/scripts/push.sh path/to/package.deb
 ```
 
-`push.sh` 临时读取 GPG passphrase, 调用 reprepro 收包 + 重新签名,
-diff 出变更文件后上传并失效 KV 索引缓存。
+`push.sh` 临时读取 GPG passphrase，调用 reprepro 收包并导出索引，
+使用隔离 GPG keyring 签名最终 by-hash Release。发布快照持久化到 `.publish/`，
+上传并校验完整清单后，Worker 通过 R2 条件写入切换当前版本。
+
+网络中断可重试原命令，或 `build-and-push.sh --resume [suite]`；
+冲突或需要全量修复时使用 `build-and-push.sh --sync [suite]`。
+升级必须先部署新版 Worker，然后使用新版脚本；首次提交前兼容原有仓库文件。
 
 ## 移除包
 
@@ -92,9 +97,9 @@ diff 出变更文件后上传并失效 KV 索引缓存。
 ./local-repo/scripts/build-and-push.sh --remove <pkg>
 ```
 
-调用 `reprepro remove` + `reprepro export`, 只上传变更的 `dists/*`.
+调用 `reprepro remove` + `reprepro export`，发布新的完整签名快照。
 默认会交互式确认, 设置 `YES=1` 跳过确认 (CI / 脚本场景).
-用于下架某个版本而无需重新打包 .deb.
+用于下架该 suite 中的包；远端历史文件保留，避免破坏旧索引引用。
 
 ## 手动 reprepro 编辑后同步
 
@@ -102,8 +107,8 @@ diff 出变更文件后上传并失效 KV 索引缓存。
 ./local-repo/scripts/build-and-push.sh --sync
 ```
 
-只调用 `reprepro export` 并上传 `dists/*`. 用于 `reprepro expire`,
-`reprepro filter` 等手动操作后重新签名并同步.
+重新导出、签名并上传校验该 suite 的全部索引和引用的包。用于手动维护后同步、
+补传丢失的远端文件或在确认本地仓库为目标状态后解决发布冲突。
 
 ## 客户端使用
 
@@ -123,29 +128,29 @@ curl -fsSL https://<your-domain>/uninstall.sh | sudo CLOUD_APT_PURGE=all bash
 
 ## 迁移到新机器
 
-打包整个 `~/cloud-apt/` (keys, conf, db, pool, dists) 成可迁移压缩包, 在新机器导入:
+打包 `CLOUD_APT_ROOT`（默认项目的 `local-repo/`）内的 keys、conf、db、pool、dists 状态，在新机器导入：
 
 ```bash
 # 旧机器: 导出
 ./local-repo/scripts/migrate-export.sh
-# → 默认输出 ~/cloud-apt/cloud-apt-export-<UTC时间戳>.tar.gz
+# → 默认输出 local-repo/cloud-apt-export-<唯一标识>.tar.gz
 #   SHA256 在终端打印, 传输后可对比
 
-# 新机器: 导入 (假设 ~/cloud-apt 还没有)
-./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-<ts>.tar.gz
-# → 自动校验 magic (CLOUD-APT-EXPORT-V1)
-#   若目标目录已存在, 自动备份为 <target>.bak.<ts>
-#   还原 keys/ 700, private.key.gpg/keyid.txt 600
+# 新机器: 导入到独立的状态目录
+./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-<id>.tar.gz /path/to/repository
+export CLOUD_APT_ROOT=/path/to/repository
+# → 验证文件清单、私钥签名和数据库后替换状态，旧状态备份到 <target>.bak.<id>
+#   保留工具脚本和本机配置；还原密钥权限；恢复后重新配置 Worker URL/Token
 ```
 
-**导入包识别**: 包内顶部固定含 `EXPORT-MANIFEST.json`, 第一行 `"magic": "CLOUD-APT-EXPORT-V1"`. 任何 magic 不匹配的 `.tar.gz` 都会被拒绝.
+**导入包识别**：包内含 `EXPORT-MANIFEST.json`，magic 为 `CLOUD-APT-EXPORT-V1`。新导出格式的 version 为 2，带逐文件 SHA256，同时兼容 V1 导入。备份放在目标目录内也能恢复。
 
-**体积优化**: `INCLUDE_DISTS=0 ./migrate-export.sh` 不打包 `dists/`, 导入后 `reprepro export` 重新签名 (GPG key 一致, 签名结果字节级相同).
+**体积优化**：`INCLUDE_DISTS=0 ./migrate-export.sh` 不打包 `dists/`，导入后运行 `build-and-push.sh --sync` 重新导出并签名。新签名的时间戳及字节不保证与旧签名相同。
 
 **安全提示**:
 - 包内私钥 (`keys/private.key.gpg`) 仍是 passphrase 加密的, 务必保管好 passphrase
 - 传输用加密通道 (scp, encrypted USB, password manager 附件)
-- 导入后建议立即验证 GPG: `gpg --list-secret-keys <email>`
+- 导入会自动在隔离 keyring 中校验指纹和签名，不修改用户全局 keyring。详见 [发布与迁移说明](../local-repo/README.md)。
 
 ## 故障排查
 

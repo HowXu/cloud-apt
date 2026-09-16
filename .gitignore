@@ -21,6 +21,11 @@ local-repo/pool/
 local-repo/dists/
 # temprary
 local-repo/incoming/
+local-repo/.publish/
+local-repo/.repository.lock
+local-repo/cloud-apt-export-*.tar.gz
+local-repo.bak.*/
+__pycache__/
 local-repo/scripts/*.sh.bak
 
 # Example package build outputs

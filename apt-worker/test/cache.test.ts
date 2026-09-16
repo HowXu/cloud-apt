@@ -54,7 +54,7 @@ describe('cache', () => {
         const env: any = {
             APT_KV: mockKV(),
             APT_BUCKET: {
-                get: vi.fn(async () => ({ httpEtag: 'etag-current' })),
+                get: vi.fn(async (key: string) => key.startsWith('releases/') ? null : ({ httpEtag: 'etag-current' })),
             },
         };
         await setCachedIndex(env, 'kali-rolling', 'amd64', { etag: 'etag-current', entries: [entry] });
@@ -62,7 +62,7 @@ describe('cache', () => {
         const r = await handleIndex('kali-rolling', 'amd64', env);
         const json = await r.json() as any;
         expect(json.packages).toEqual([entry]);
-        expect((env.APT_BUCKET.get as any).mock.calls.length).toBe(1);
+        expect((env.APT_BUCKET.get as any).mock.calls.length).toBe(2);
     });
 
     it('cache miss when ETag differs (R2 updated)', async () => {
@@ -78,7 +78,7 @@ describe('cache', () => {
         const env: any = {
             APT_KV: mockKV(),
             APT_BUCKET: {
-                get: vi.fn(async () => ({
+                get: vi.fn(async (key: string) => key.startsWith('releases/') ? null : ({
                     httpEtag: 'etag-new',
                     body: new ReadableStream({
                         start(c) {

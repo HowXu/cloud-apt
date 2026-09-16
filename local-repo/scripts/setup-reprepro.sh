@@ -16,7 +16,7 @@ chmod 700 "$REPO_ROOT/keys"
 
 # Clone conf/distributions from the template only when no live file exists.
 DIST="$REPO_ROOT/conf/distributions"
-TEMPLATE="$REPO_ROOT/conf/distributions.template"
+TEMPLATE="$SCRIPT_DIR/conf/distributions.template"
 if [[ ! -f "$DIST" ]]; then
     if [[ ! -f "$TEMPLATE" ]]; then
         echo "[ERROR] Template $TEMPLATE is missing; the project tree looks broken" >&2
