@@ -9,9 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import urllib.error
 import urllib.parse
-import urllib.request
 import uuid
 
 from repo_state import atomic_json, gpg, repo_lock, safe_relative, sha256, signing_home
@@ -21,22 +19,46 @@ class Remote:
     def __init__(self, url, token):
         parsed = urllib.parse.urlsplit(url)
         if parsed.scheme != 'https' or not parsed.netloc or parsed.query or parsed.fragment or parsed.username or parsed.password:
-            raise ValueError('WORKER_URL 必须是 HTTPS 地址')
+            raise ValueError('WORKER_URL must be an HTTPS URL')
         self.url, self.token = url.rstrip('/'), token
 
     def request(self, method, path, data=None, headers=None):
-        headers = dict(headers or {})
-        headers['Authorization'] = 'Bearer ' + self.token
-        request = urllib.request.Request(self.url + path, data=data, headers=headers, method=method)
-        class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *args, **kwargs):
-                return None
-        try:
-            with urllib.request.build_opener(NoRedirect).open(request, timeout=120) as response:
-                return response.read(), response.headers
-        except urllib.error.HTTPError as error:
-            detail = error.read(4096).decode(errors='replace')
-            raise RuntimeError(f'{method} {path}: HTTP {error.code}: {detail}') from None
+        # Use curl directly so Cloudflare Bot Fight Mode (1010) does not block Python's
+        # TLS fingerprint. curl's default User-Agent is whitelisted.
+        with tempfile.TemporaryDirectory(prefix='cloud-apt-remote-') as directory:
+            body_path, header_path, data_path = (os.path.join(directory, name)
+                                                  for name in ('body', 'headers', 'data'))
+            cmd = ['curl', '-sS', '--max-time', '120', '-X', method,
+                   '-D', header_path, '-o', body_path, self.url + path]
+            for key, value in (headers or {}).items():
+                cmd += ['-H', f'{key}: {value}']
+            cmd += ['-H', f'Authorization: Bearer {self.token}']
+            if data is not None:
+                with open(data_path, 'wb') as sink:
+                    if hasattr(data, 'read'):
+                        shutil.copyfileobj(data, sink)
+                    else:
+                        sink.write(data)
+                cmd += ['--data-binary', f'@{data_path}']
+            subprocess.run(cmd, check=True)
+            with open(header_path) as sink:
+                lines = sink.read().splitlines()
+            status_line = lines[0] if lines else ''
+            try:
+                status = int(status_line.split()[1])
+            except (IndexError, ValueError):
+                raise RuntimeError(f'{method} {path}: malformed response status: {status_line!r}') from None
+            headers_map = {}
+            for line in lines[1:]:
+                if ':' in line:
+                    name, _, value = line.partition(':')
+                    headers_map[name.strip()] = value.strip()
+            with open(body_path, 'rb') as sink:
+                body = sink.read()
+            if status >= 400:
+                detail = body[:4096].decode(errors='replace')
+                raise RuntimeError(f'{method} {path}: HTTP {status}: {detail}') from None
+            return body, headers_map
 
     def current(self, suite):
         body, _ = self.request('GET', f'/api/publish/{suite}')
@@ -104,7 +126,7 @@ def prepare_snapshot(root, suite, destination, home, fingerprint, password):
                     continue
                 filename = fields.get('Filename', '')
                 if not safe_relative(filename) or not filename.startswith('pool/') or not fields.get('SHA256'):
-                    raise RuntimeError('Packages 缺少安全的 Filename / SHA256')
+                    raise RuntimeError('Packages missing safe Filename / SHA256')
                 expected = (fields['SHA256'], int(fields['Size']))
                 if filename in packages and packages[filename] != expected:
                     raise RuntimeError('same path references different packages')
@@ -196,12 +218,12 @@ def main():
             operation['package'] = args.remove
     else:
         if not args.arguments:
-            parser.error('需要 .deb 路径，或 --sync / --resume / --remove')
+            parser.error('a .deb path, or --sync / --resume / --remove, is required')
         deb = Path(args.arguments[0]).resolve()
         suite = args.arguments[1] if len(args.arguments) > 1 else 'kali-rolling'
         operation = {'mode': 'include', 'deb': str(deb), 'sha256': sha256(deb)}
     if not re.fullmatch(r'[a-z0-9][a-z0-9.+~-]{0,63}', suite) or '..' in suite:
-        raise ValueError('非法 suite')
+        raise ValueError('invalid suite')
     with repo_lock(root):
         pending = root / '.publish/pending.json'
         if pending.exists() and not args.sync:

@@ -219,7 +219,7 @@ def main():
         export_repository(root, archive, os.environ.get('INCLUDE_DISTS') != '0')
     else:
         if not args.archive:
-            parser.error('导入需要备份路径')
+            parser.error('import requires a backup path')
         password = os.environ.get('GPG_PASSPHRASE') or getpass.getpass('GPG passphrase: ')
         import_repository(args.archive, args.target or root, password, os.environ.get('YES') != '1')
 
