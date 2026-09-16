@@ -52,7 +52,7 @@ class Remote:
             for line in lines[1:]:
                 if ':' in line:
                     name, _, value = line.partition(':')
-                    headers_map[name.strip()] = value.strip()
+                    headers_map[name.strip().lower()] = value.strip()
             with open(body_path, 'rb') as sink:
                 body = sink.read()
             if status >= 400:
@@ -73,7 +73,7 @@ class Remote:
                 'Content-Type': 'application/octet-stream', 'Content-Length': str(record['size']),
                 'X-Content-SHA256': record['sha256'],
             })
-        if headers.get('X-Content-SHA256') != record['sha256']:
+        if headers.get('x-content-sha256') != record['sha256']:
             raise RuntimeError('server did not confirm SHA256; deploy the new Worker first')
 
     def commit(self, state):

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define HELLO_VERSION "0.2.0"
+#define HELLO_VERSION "0.2.1"
 #define HELLO_REPO    "https://deb.howxu.cn"
 
 static void usage(const char *prog) {

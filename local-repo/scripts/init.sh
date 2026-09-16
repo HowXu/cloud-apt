@@ -27,6 +27,24 @@ else
     :
 fi
 
+# 2.5 Short-circuit if the local state already matches the Worker. After a
+# successful migrate-import the GPG key, config, and Worker pubkey.asc are
+# all in sync; re-running init.sh would only re-push the key and install
+# script (no-ops but noisy), so detect and exit.
+if [[ -n "$WORKER_URL" ]]; then
+    KEY_DIR="$SCRIPT_DIR/../keys"
+    if [[ -s "$KEY_DIR/public.key" && -s "$KEY_DIR/private.key.gpg" && -s "$KEY_DIR/keyid.txt" ]]; then
+        local_sha=$(sha256sum "$KEY_DIR/public.key" | awk '{print $1}')
+        remote_sha=$(curl -fsS "$WORKER_URL/pubkey.asc" 2>/dev/null | sha256sum | awk '{print $1}' || true)
+        if [[ -n "$remote_sha" && "$local_sha" == "$remote_sha" ]]; then
+            ok "Already initialized at $WORKER_URL; nothing to do."
+            ok "Client: curl -fsSL ${WORKER_URL}/install.sh | sudo bash"
+            ok "Upload: $SCRIPT_DIR/push.sh path/to/package.deb"
+            exit 0
+        fi
+    fi
+fi
+
 if [[ -z "$WORKER_URL" ]]; then
     while :; do
         read -rp "Worker URL (e.g. https://apt.example.com): " WORKER_URL

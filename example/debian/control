@@ -1,5 +1,5 @@
 Package: cloud-apt-hello
-Version: 0.2.0-1
+Version: 0.2.1-1
 Architecture: amd64
 Maintainer: cloud-apt example <noreply@example.com>
 Section: utils
@@ -12,7 +12,7 @@ Description: cloud-apt namespaced hello example
  with the official Debian 'hello' package in main (which
  prints 'Hello, world!' and is used for dpkg/apt smoke tests).
  .
- Installs /opt/cloud-apt-hello-0.2.0/bin/cloud-apt-hello and
+ Installs /opt/cloud-apt-hello-0.2.1/bin/cloud-apt-hello and
  exposes it via /usr/local/bin/cloud-apt-hello. Supports
  --version, --repo, and --help flags for verifying which
  version is installed and which repository it came from.

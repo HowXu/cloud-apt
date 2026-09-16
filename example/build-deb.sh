@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PKG=cloud-apt-hello
-VERSION=0.2.0
+VERSION=0.2.1
 RELEASE=1
 ARCH=amd64
 PREFIX="/opt/${PKG}-${VERSION}"
