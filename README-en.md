@@ -121,6 +121,10 @@ sudo apt update && sudo apt install myapp
 
 ## Development
 
+Publishing and migration require Linux, Python 3.10+, reprepro and GnuPG. Deploy the updated Worker before using the updated scripts. Publications are saved locally, uploaded with SHA256 verification, and activated through a conditional R2 pointer update. Failed uploads can be resumed with `build-and-push.sh --resume [suite]`; `--sync [suite]` builds and verifies a fresh full publication. Old by-hash indexes and packages are retained for clients using earlier signed metadata.
+
+Migration restores state directories only, preserving installed scripts and local connection settings. It validates the archive and tests the encrypted signing key in an isolated GPG keyring before replacing state. Run Linux integration tests with `python3 -m unittest discover -s local-repo/test -v`; they use temporary repositories and APT state, without installing system packages.
+
 ```bash
 # Local development (Worker + ASSETS binding serves the frontend automatically)
 cd apt-worker

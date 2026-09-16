@@ -10,12 +10,12 @@ echo "→ 初始化本地仓库: $REPO_ROOT"
 
 # 运行时目录 (gitignore). conf/ 已存在 (有 distributions.template),
 # 其它要现建
-mkdir -p "$REPO_ROOT"/{incoming,pool,dists,keys,db}
+mkdir -p "$REPO_ROOT"/{incoming,pool,dists,keys,db,conf}
 chmod 700 "$REPO_ROOT/keys"
 
 # 从模板克隆 conf/distributions (只在没有 live 文件时)
 DIST="$REPO_ROOT/conf/distributions"
-TEMPLATE="$REPO_ROOT/conf/distributions.template"
+TEMPLATE="$SCRIPT_DIR/conf/distributions.template"
 if [[ ! -f "$DIST" ]]; then
     if [[ ! -f "$TEMPLATE" ]]; then
         echo "✗ 模板 $TEMPLATE 缺失, 项目损坏" >&2

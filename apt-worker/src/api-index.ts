@@ -2,6 +2,7 @@ import type { Bindings, PackageEntry } from './env';
 import { getCachedIndex, setCachedIndex } from './cache';
 import { parsePackages } from './parser';
 import { validateSuite } from './shared/path';
+import { resolveIndexKey } from './releases';
 
 const ARCHS = ['amd64', 'arm64'] as const;
 type Arch = typeof ARCHS[number];
@@ -10,12 +11,13 @@ async function loadIndex(env: Bindings, suite: string, arch: Arch): Promise<Pack
     const bucket = env.APT_BUCKET;
     if (!bucket) return [];
 
-    const obj = await bucket.get(`dists/${suite}/main/binary-${arch}/Packages.gz`);
+    const obj = await bucket.get(await resolveIndexKey(bucket, `dists/${suite}/main/binary-${arch}/Packages.gz`));
     if (!obj) return [];
 
     const etag = obj.httpEtag;
     const cached = await getCachedIndex(env, suite, arch);
     if (cached && cached.etag === etag) {
+        await obj.body?.cancel();
         return cached.entries;
     }
 
