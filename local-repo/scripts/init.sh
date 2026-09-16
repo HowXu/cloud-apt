@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 info "Initializing cloud-apt"
 
 # 1. Dependency check
-for cmd in curl gpg reprepro mktemp sed; do
+for cmd in curl gpg reprepro python3 mktemp sed; do
     command -v "$cmd" >/dev/null 2>&1 || die "Missing dependency: $cmd (apt install $cmd)"
 done
 
