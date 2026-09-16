@@ -36,6 +36,6 @@ export const siteConfig: SiteConfig = {
           code: 'sudo apt install <package-name>' },
     ],
     showGithubButton: true,
-    githubUrl: 'https://github.com/<you>/cloud-apt',
+    githubUrl: 'https://github.com/HowXu/cloud-apt',
     defaultSuite: 'kali-rolling',
 };
