@@ -1,8 +1,14 @@
 <template>
   <div class="max-w-1100px mx-auto p-8">
-    <header class="flex items-baseline justify-between mb-8">
+    <header class="flex items-center mb-8 gap-3">
+      <img
+        v-if="siteConfig.iconUrl"
+        :src="siteConfig.iconUrl"
+        :alt="siteConfig.iconAlt || ''"
+        class="h-7 w-7"
+      />
       <h1 class="text-2xl">
-        <router-link to="/" class="text-fg no-underline">{{ siteConfig.title }}</router-link>
+        <router-link to="/" class="text-fg no-underline">{{ siteConfig.headerTitle }}</router-link>
       </h1>
     </header>
 

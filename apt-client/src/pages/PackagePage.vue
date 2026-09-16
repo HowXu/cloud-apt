@@ -1,8 +1,14 @@
 <template>
   <div class="max-w-1100px mx-auto p-8">
-    <header class="flex items-baseline justify-between mb-8">
+    <header class="flex items-center mb-8 gap-3">
+      <img
+        v-if="siteConfig.iconUrl"
+        :src="siteConfig.iconUrl"
+        :alt="siteConfig.iconAlt || ''"
+        class="h-7 w-7"
+      />
       <h1 class="text-2xl">
-        <router-link to="/" class="text-fg no-underline">{{ siteConfig.title }}</router-link>
+        <router-link to="/" class="text-fg no-underline">{{ siteConfig.headerTitle }}</router-link>
       </h1>
     </header>
 
@@ -13,7 +19,7 @@
     <div v-else-if="!versions.length" class="text-muted">Package not found</div>
     <div v-else>
       <h2 class="text-lg mt-4">{{ pkg }}</h2>
-      <p v-if="latest?.Description" class="text-muted">{{ latest.Description }}</p>
+      <p v-if="latest?.Description" class="text-muted mt-3 leading-relaxed">{{ latest.Description }}</p>
 
       <h3 class="text-base mt-8 mb-2">Versions ({{ versions.length }})</h3>
       <table class="w-full border-collapse">
@@ -31,7 +37,7 @@
             <td class="px-3 py-2 font-mono text-sm">{{ v.Architecture }}</td>
             <td class="px-3 py-2">{{ formatSize(v.Size) }}</td>
             <td class="px-3 py-2">
-              <a :href="`/${v.Filename}`" class="text-accent no-underline hover:underline" download>Download .deb</a>
+              <a :href="`/${v.Filename}`" class="text-accent no-underline hover:underline" download>download</a>
             </td>
           </tr>
         </tbody>
