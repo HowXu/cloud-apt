@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# 共用：输出提示与错误
+# Shared: output helpers (info/ok/warn/die).
+# All helpers emit plain ASCII tags so logs stay portable across locales.
 set -euo pipefail
 
-info()  { printf '→ %s\n' "$*"; }
-ok()    { printf '✓ %s\n' "$*"; }
-warn()  { printf '⚠ %s\n' "$*" >&2; }
-die()   { printf '✗ %s\n' "$*" >&2; exit 1; }
+info()  { printf '[INFO]  %s\n' "$*"; }
+ok()    { printf '[OK]    %s\n' "$*"; }
+warn()  { printf '[WARN]  %s\n' "$*" >&2; }
+die()   { printf '[ERROR] %s\n' "$*" >&2; exit 1; }

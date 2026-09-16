@@ -1,47 +1,48 @@
 #!/usr/bin/env bash
-# 一次性: 在项目内 local-repo/ 下创建运行时目录, 不污染 $HOME
-# 默认 REPO_ROOT = 项目里的 local-repo/. 用 CLOUD_APT_ROOT 覆盖.
+# One-shot: create runtime directories under local-repo/ without touching
+# $HOME. Default REPO_ROOT is the project-local local-repo/; override with
+# CLOUD_APT_ROOT.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR}"
 
-echo "→ 初始化本地仓库: $REPO_ROOT"
+echo "[INFO]  Initializing local repository at: $REPO_ROOT"
 
-# 运行时目录 (gitignore). conf/ 已存在 (有 distributions.template),
-# 其它要现建
+# Runtime directories (gitignored). conf/ already exists (it ships
+# distributions.template); create the rest.
 mkdir -p "$REPO_ROOT"/{incoming,pool,dists,keys,db}
 chmod 700 "$REPO_ROOT/keys"
 
-# 从模板克隆 conf/distributions (只在没有 live 文件时)
+# Clone conf/distributions from the template only when no live file exists.
 DIST="$REPO_ROOT/conf/distributions"
 TEMPLATE="$REPO_ROOT/conf/distributions.template"
 if [[ ! -f "$DIST" ]]; then
     if [[ ! -f "$TEMPLATE" ]]; then
-        echo "✗ 模板 $TEMPLATE 缺失, 项目损坏" >&2
+        echo "[ERROR] Template $TEMPLATE is missing; the project tree looks broken" >&2
         exit 1
     fi
     cp "$TEMPLATE" "$DIST"
-    echo "  ✓ 从模板克隆 conf/distributions (gen-key.sh 会替换 SignWith 占位符)"
+    echo "[OK]    Cloned conf/distributions from template (gen-key.sh will replace the SignWith placeholder)"
 fi
 
-# scripts/ + dockerfiles/ 已经在 $REPO_ROOT, 不复制
+# scripts/ and dockerfiles/ already live under $REPO_ROOT, so do not copy them.
 echo ""
-echo "✓ 仓库结构已就绪: $REPO_ROOT"
+echo "[OK]    Repository structure ready at: $REPO_ROOT"
 echo ""
-echo "目录布局:"
+echo "Layout:"
 echo "  $REPO_ROOT/"
-echo "  ├── conf/"
-echo "  │   ├── distributions.template    (git 跟踪, 初始模板)"
-echo "  │   └── distributions            (gitignore, gen-key.sh 会修改)"
-echo "  ├── scripts/                     (git 跟踪, 同时是模板 + 实时入口)"
-echo "  ├── dockerfiles/                 (git 跟踪)"
-echo "  ├── keys/                        (gitignore, GPG 私钥)"
-echo "  ├── db/                          (gitignore, reprepro SQLite)"
-echo "  ├── pool/                        (gitignore, 上传的 .deb)"
-echo "  ├── dists/                       (gitignore, 签名的 Release/Packages)"
-echo "  └── incoming/                    (gitignore, 临时入站)"
+echo "  |-- conf/"
+echo "  |   |-- distributions.template    (tracked, initial template)"
+echo "  |   `-- distributions              (gitignored, modified by gen-key.sh)"
+echo "  |-- scripts/                       (tracked, both template and runtime entrypoint)"
+echo "  |-- dockerfiles/                   (tracked)"
+echo "  |-- keys/                          (gitignored, GPG private key)"
+echo "  |-- db/                            (gitignored, reprepro SQLite)"
+echo "  |-- pool/                          (gitignored, uploaded .deb files)"
+echo "  |-- dists/                         (gitignored, signed Release/Packages)"
+echo "  `-- incoming/                      (gitignored, transient upload staging)"
 echo ""
-echo "下一步:"
-echo "  1. ./local-repo/scripts/gen-key.sh 生成 GPG 密钥"
-echo "  2. ./local-repo/scripts/push-key.sh + push-install.sh 推送到 Worker"
+echo "Next steps:"
+echo "  1. ./local-repo/scripts/gen-key.sh to generate a GPG key"
+echo "  2. ./local-repo/scripts/push-key.sh + push-install.sh to push to the Worker"

@@ -1,71 +1,81 @@
 #!/usr/bin/env bash
+# One-shot: generate a GPG key pair (ed25519, 2-year expiry).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR}"
 KEY_DIR="$REPO_ROOT/keys"
 
+# M-3: a partial keys/ state (e.g. only public.key, missing
+# private.key.gpg) is a corruption condition. Generating a new key
+# blindly would create inconsistencies with the leftover files, so
+# refuse and let the operator decide on a backup/cleanup strategy.
+# Only proceed when keys/ is fully empty or all three files are present.
 EXISTING_KEYS=()
 [[ -s "$KEY_DIR/public.key" ]]     && EXISTING_KEYS+=("public.key")
 [[ -s "$KEY_DIR/private.key.gpg" ]] && EXISTING_KEYS+=("private.key.gpg")
 [[ -s "$KEY_DIR/keyid.txt" ]]       && EXISTING_KEYS+=("keyid.txt")
 if [[ "${#EXISTING_KEYS[@]}" -gt 0 && "${#EXISTING_KEYS[@]}" -ne 3 ]]; then
-    echo "✗ $KEY_DIR 已存在部分密钥文件: ${EXISTING_KEYS[*]}" >&2
-    echo "  这是损坏状态 (三件套必须齐全或全空)。" >&2
-    echo "  若要保留现有材料, 请勿重跑本脚本;" >&2
-    echo "  若要彻底重生成, 先备份后删除:" >&2
-    echo "    mkdir -p $KEY_DIR.bak && mv $KEY_DIR/*.key* $KEY_DIR/keyid.txt $KEY_DIR.bak/" >&2
+    echo "[ERROR] $KEY_DIR already has a partial key set: ${EXISTING_KEYS[*]}" >&2
+    echo "        This is a corrupt state: all three files must be present, or none." >&2
+    echo "        To keep the existing material, do NOT re-run this script." >&2
+    echo "        To regenerate from scratch, back up and remove them first:" >&2
+    echo "          mkdir -p $KEY_DIR.bak && mv $KEY_DIR/*.key* $KEY_DIR/keyid.txt $KEY_DIR.bak/" >&2
     exit 1
 fi
 
-echo "→ GPG 密钥生成 (ed25519, 2 年过期)"
+echo "[INFO]  Generating GPG key (ed25519, 2-year expiry)"
 echo ""
 
-# 已经 export 过就直接用, 否则才交互读 (read -rs 是 silent,
-# 没 -p 提示符会让人以为卡住了)
+# Reuse an already-exported passphrase if one is set; otherwise prompt.
+# read -rs is silent, and without -p the prompt would make it look hung.
 if [[ -z "${GPG_PASSPHRASE:-}" ]]; then
-    read -rsp "请输入 passphrase (私钥密码, 必须记住并备份): " GPG_PASSPHRASE
+    read -rsp "Enter passphrase (private-key password, must be remembered and backed up): " GPG_PASSPHRASE
     echo ""
     if [[ -z "$GPG_PASSPHRASE" ]]; then
-        echo "✗ passphrase 不能为空" >&2
+        echo "[ERROR] Passphrase cannot be empty" >&2
         exit 1
     fi
 else
-    echo "(使用已 export 的 GPG_PASSPHRASE, 长度 ${#GPG_PASSPHRASE})"
+    echo "(Using already-exported GPG_PASSPHRASE, length ${#GPG_PASSPHRASE})"
 fi
 
-# M-12: 长度校验 (apply to both read + export paths)
+# M-12: length check (applies to both the prompted and exported paths).
 if [[ ${#GPG_PASSPHRASE} -lt 12 ]]; then
-    echo "✗ passphrase 太短 (${#GPG_PASSPHRASE} 字符, 至少 12), 请使用强密码" >&2
+    echo "[ERROR] Passphrase is too short (${#GPG_PASSPHRASE} chars, need at least 12); use a strong password" >&2
     exit 1
 fi
 
-# 询问邮箱 (会写入 reprepro.conf 的 SignWith)
-read -rp "请输入 GPG 邮箱 (例如 apt@example.com): " GPG_EMAIL
+# Prompt for the GPG email; it will be written into reprepro.conf's SignWith.
+read -rp "Enter GPG email (e.g. apt@example.com): " GPG_EMAIL
 if [[ -z "$GPG_EMAIL" ]]; then
-    echo "✗ 邮箱不能为空" >&2
+    echo "[ERROR] Email cannot be empty" >&2
     exit 1
 fi
 
-# 防多 key 冲突: 如果 keyring 已经有该邮箱的私钥, 拒绝再次生成.
-# (reprepro 默认用最新一把签 InRelease, push-key.sh 用第一把导出 pubkey,
-#  两把不一致 → 客户端 apt update 报 "Missing key ...")
+# Defend against multi-key collisions: if the keyring already has a
+# private key for this email, refuse to generate again. reprepro
+# defaults to signing InRelease with the newest key while push-key.sh
+# exports the first key as pubkey, and a mismatch breaks apt update
+# on the client with "Missing key ...".
 EXISTING=$(gpg --list-secret-keys --with-colons "$GPG_EMAIL" 2>/dev/null \
     | awk -F: '/^fpr:/ {print $10}' || true)
 if [[ -n "$EXISTING" ]]; then
-    echo "✗ keyring 已经有 <$GPG_EMAIL> 的私钥:" >&2
+    echo "[ERROR] Keyring already has a private key for <$GPG_EMAIL>:" >&2
     echo "$EXISTING" | sed 's/^/    /' >&2
-    echo "  如要重新生成, 先手动删除全部:" >&2
-    echo "    for fpr in $EXISTING; do gpg --batch --yes --delete-secret-keys \"\$fpr\"; done" >&2
-    echo "  然后重跑本脚本. (避免 'push 用 #1, 签用 #N' 的密钥错位)" >&2
+    echo "        To regenerate, remove them all first:" >&2
+    echo "          for fpr in $EXISTING; do gpg --batch --yes --delete-secret-keys \"\$fpr\"; done" >&2
+    echo "        Then re-run this script. (Prevents the push-uses-#1, sign-uses-#N mismatch.)" >&2
     exit 1
 fi
 
 mkdir -p "$KEY_DIR"
 chmod 700 "$KEY_DIR"
 
-# I-2: 不再写 gpg-gen-key.conf 到磁盘, passphrase 通过 fd 3 传入.
-# M-13: 跟踪 mktemp 临时文件, EXIT 时 shred 残留 (含 private.key).
+# I-2: no gpg-gen-key.conf is written to disk; passphrase is supplied
+# via fd 3.
+# M-13: track mktemp temp files so the EXIT trap can shred any residue
+# (including private.key).
 TMP_FILES=()
 cleanup() {
     local f
@@ -80,8 +90,9 @@ trap cleanup EXIT
 
 gpgconf --kill gpg-agent 2>/dev/null || true
 
-# I-2: 全部选项 inline 进 stdin (heredoc), passphrase 通过 fd 3 (here-string,
-# 不落盘). gpg-gen-key.conf 不再写到磁盘.
+# I-2: all options are inlined into the heredoc; passphrase is supplied
+# via fd 3 (here-string, never written to disk). gpg-gen-key.conf is
+# never created.
 gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
     --gen-key 3<<<"$GPG_PASSPHRASE" <<EOF
 %echo Generating cloud-apt signing key
@@ -97,25 +108,26 @@ EOF
 FPR=$(gpg --list-keys --with-colons "$GPG_EMAIL" | awk -F: '/^fpr:/ {print $10; exit}')
 
 if [[ -z "$FPR" ]]; then
-    echo "✗ 密钥生成失败" >&2
+    echo "[ERROR] Key generation failed" >&2
     exit 1
 fi
 
-# M-13: 原子写 public.key (tmp + mv, 同 fs 保证原子)
+# M-13: atomic write of public.key (tmp + mv, same fs guarantees atomicity).
 tmp=$(mktemp "$KEY_DIR/.tmp.XXXX")
 TMP_FILES+=("$tmp")
 chmod 600 "$tmp"
 gpg --export --armor "$FPR" > "$tmp"
 mv -f "$tmp" "$KEY_DIR/public.key"
 
-# M-13: 原子写 private.key
+# M-13: atomic write of private.key.
 tmp=$(mktemp "$KEY_DIR/.tmp.XXXX")
 TMP_FILES+=("$tmp")
 chmod 600 "$tmp"
 gpg --export-secret-keys --armor "$FPR" > "$tmp"
 mv -f "$tmp" "$KEY_DIR/private.key"
 
-# M-11: passphrase 同样走 fd 3, 不进 argv (避免 ps/top 可见)
+# M-11: passphrase also flows through fd 3, never via argv (so it does
+# not show up in ps/top).
 gpg --batch --yes --pinentry-mode loopback \
     --passphrase-fd 3 \
     --symmetric --cipher-algo AES256 \
@@ -126,7 +138,7 @@ shred -u "$KEY_DIR/private.key"
 chmod 600 "$KEY_DIR/private.key.gpg" "$KEY_DIR/public.key"
 unset GPG_PASSPHRASE
 
-# M-13: 原子写 keyid.txt 供后续脚本用
+# M-13: atomic write of keyid.txt for downstream scripts.
 tmp=$(mktemp "$KEY_DIR/.tmp.XXXX")
 TMP_FILES+=("$tmp")
 chmod 600 "$tmp"
@@ -139,38 +151,39 @@ chmod 600 "$KEY_DIR/keyid.txt"
 
 ACTUAL_FPR="$(gpg --list-secret-keys --with-colons "$GPG_EMAIL" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
 if [[ -z "$ACTUAL_FPR" ]]; then
-    echo "✗ keyring 找不到 <$GPG_EMAIL> 的私钥, 生成疑似失败" >&2
+    echo "[ERROR] Keyring has no private key for <$GPG_EMAIL>; generation may have failed" >&2
     exit 1
 fi
 if [[ "$ACTUAL_FPR" != "$FPR" ]]; then
-    echo "✗ 写盘后 FPR 自检失败 — keyid.txt=$FPR keyring=$ACTUAL_FPR" >&2
-    echo "  通常说明 keys/ 被陈旧文件覆盖了, 检查:" >&2
-    echo "    cat local-repo/keys/keyid.txt" >&2
-    echo "    gpg --list-secret-keys --with-colons $GPG_EMAIL" >&2
+    echo "[ERROR] Post-write FPR self-check failed -- keyid.txt=$FPR keyring=$ACTUAL_FPR" >&2
+    echo "        Usually this means keys/ was overwritten by stale files. Check:" >&2
+    echo "          cat local-repo/keys/keyid.txt" >&2
+    echo "          gpg --list-secret-keys --with-colons $GPG_EMAIL" >&2
     exit 1
 fi
 
-# 同步更新 conf/distributions 的 SignWith.
-# 之前会被静默跳过 (conf/distributions 不存在时), 留一个 __GPG_EMAIL__
-# 占位符让 build-and-push.sh 后面 fail, 用户摸不着头脑.
+# Keep conf/distributions' SignWith in sync. Previously this was
+# silently skipped when conf/distributions did not exist, leaving a
+# __GPG_EMAIL__ placeholder that would later confuse build-and-push.sh.
 DIST_FILE="$REPO_ROOT/conf/distributions"
 if [[ ! -f "$DIST_FILE" ]]; then
-    echo "✗ $DIST_FILE 不存在" >&2
-    echo "  请先跑 ./local-repo/scripts/setup-reprepro.sh 初始化仓库结构" >&2
+    echo "[ERROR] $DIST_FILE does not exist" >&2
+    echo "        Run ./local-repo/scripts/setup-reprepro.sh first to initialize the repo layout" >&2
     exit 1
 fi
 sed -i "s|SignWith:.*|SignWith: $GPG_EMAIL|" "$DIST_FILE"
 
-# 校验替换真的生效 (防御 sed 静默失败 + 模板格式漂移)
+# Defensive: confirm the replacement actually took effect (sed silent
+# failure or template drift).
 if grep -q '^SignWith:.*__GPG_EMAIL__' "$DIST_FILE"; then
-    echo "✗ SignWith 替换失败, 仍是占位符" >&2
-    echo "  模板格式可能已变, 需要手动检查 $DIST_FILE" >&2
+    echo "[ERROR] SignWith replacement failed; placeholder is still present" >&2
+    echo "        The template format may have changed; inspect $DIST_FILE manually" >&2
     exit 1
 fi
-echo "  ✓ 已更新 $DIST_FILE 的 SignWith"
+echo "[OK]    Updated SignWith in $DIST_FILE"
 
 echo ""
-echo "✓ 密钥生成完成"
-echo "  公钥: $KEY_DIR/public.key"
-echo "  私钥 (加密): $KEY_DIR/private.key.gpg"
-echo "  ⚠ 强烈建议把 $KEY_DIR/private.key.gpg 同步到密码管理器"
+echo "[OK]    Key generation complete"
+echo "        Public key:         $KEY_DIR/public.key"
+echo "        Private key (encrypted): $KEY_DIR/private.key.gpg"
+echo "[WARN]  Strongly consider syncing $KEY_DIR/private.key.gpg to your password manager"

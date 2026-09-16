@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# cloud-apt 客户端一键安装脚本
-# 部署到 Worker R2 的 scripts/install.sh, 客户端 curl 执行
-# __CLOUD_APT_DOMAIN__ 由 push-install.sh 替换
+# cloud-apt client one-shot install script.
+# Deployed to the Worker's R2 bucket as scripts/install.sh and executed by
+# clients via curl.
+# __CLOUD_APT_DOMAIN__ is substituted at upload time by push-install.sh.
 set -euo pipefail
 DOMAIN="__CLOUD_APT_DOMAIN__"
 KEYRING=/usr/share/keyrings/cloud-apt-archive-keyring.gpg
@@ -15,8 +16,8 @@ else
 fi
 
 if [[ ! "$SUITE" =~ ^[a-z0-9][a-z0-9.+~-]*$ ]]; then
-    echo "✗ CLOUD_APT_SUITE 非法: '$SUITE'" >&2
-    echo "  期望格式: 小写字母数字开头, 后续允许 . + ~ - (deb822 suite 规则)" >&2
+    echo "[ERROR] CLOUD_APT_SUITE is invalid: '$SUITE'" >&2
+    echo "        Expected format: lowercase alnum first char, then . + ~ - allowed (deb822 suite rules)" >&2
     exit 1
 fi
 
@@ -35,5 +36,5 @@ EOF
 
 sudo apt update
 echo ""
-echo "✓ cloud-apt 已配置 (suite=$SUITE, domain=$DOMAIN)"
-echo "  用 apt install <package> 安装"
+echo "[OK]    cloud-apt is configured (suite=$SUITE, domain=$DOMAIN)"
+echo "        Install packages with: sudo apt install <package>"

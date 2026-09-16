@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# 把整个本地 apt 仓库 (keys, conf, db, pool, dists) 打包成可迁移的 tar.gz,
-# 顶部含 EXPORT-MANIFEST.json, 供 migrate-import.sh 校验 magic.
+# Bundle the entire local apt repo (keys, conf, db, pool, dists) into a
+# portable tar.gz with an EXPORT-MANIFEST.json at the top, so
+# migrate-import.sh can validate the magic field.
 #
-# 用法:
-#   ./migrate-export.sh                       # 默认输出到 ~/cloud-apt/cloud-apt-export-<时间戳>.tar.gz
-#   ./migrate-export.sh /path/to/out.tar.gz   # 自定义输出
-#   INCLUDE_DISTS=0 ./migrate-export.sh       # 不打包 dists/ (体积更小, 导入后需 reprepro export 重签)
+# Usage:
+#   ./migrate-export.sh                       # default: ~/cloud-apt/cloud-apt-export-<timestamp>.tar.gz
+#   ./migrate-export.sh /path/to/out.tar.gz   # custom output
+#   INCLUDE_DISTS=0 ./migrate-export.sh       # skip dists/ (smaller; re-run reprepro export to re-sign after import)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,10 +14,10 @@ REPO_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="${1:-$REPO_ROOT/cloud-apt-export-$TS.tar.gz}"
 
-# ---------- 前置校验 ----------
+# ---------- Preflight checks ----------
 if [[ ! -d "$REPO_ROOT" ]]; then
-    echo "✗ REPO_ROOT 不存在: $REPO_ROOT" >&2
-    echo "  请先运行 setup-reprepro.sh 初始化" >&2
+    echo "[ERROR] REPO_ROOT does not exist: $REPO_ROOT" >&2
+    echo "        Run setup-reprepro.sh first" >&2
     exit 1
 fi
 
@@ -28,37 +29,39 @@ DISTS_DIR="$REPO_ROOT/dists"
 
 for d in "$KEY_DIR" "$CONF_DIR" "$DB_DIR" "$POOL_DIR"; do
     if [[ ! -d "$d" ]]; then
-        echo "✗ 缺少目录: $d" >&2
-        echo "  请先运行 setup-reprepro.sh + gen-key.sh" >&2
+        echo "[ERROR] Missing directory: $d" >&2
+        echo "        Run setup-reprepro.sh + gen-key.sh first" >&2
         exit 1
     fi
 done
 
 if [[ ! -f "$KEY_DIR/private.key.gpg" ]]; then
-    echo "✗ 未找到加密私钥: $KEY_DIR/private.key.gpg" >&2
-    echo "  请先运行 gen-key.sh" >&2
+    echo "[ERROR] Encrypted private key not found: $KEY_DIR/private.key.gpg" >&2
+    echo "        Run gen-key.sh first" >&2
     exit 1
 fi
 
 if [[ ! -f "$KEY_DIR/keyid.txt" ]]; then
-    echo "✗ 未找到 $KEY_DIR/keyid.txt" >&2
+    echo "[ERROR] $KEY_DIR/keyid.txt not found" >&2
     exit 1
 fi
 
-# 从 keyid.txt 显式解析 EMAIL/FPR (不 source, 避免任意代码执行)
+# Explicitly parse EMAIL/FPR from keyid.txt (do not source it; that
+# would allow arbitrary code execution).
 EMAIL="$(grep '^EMAIL=' "$KEY_DIR/keyid.txt" | head -1 | cut -d= -f2-)"
 FPR="$(grep '^FPR=' "$KEY_DIR/keyid.txt" | head -1 | cut -d= -f2-)"
 
 if [[ -z "$EMAIL" || -z "$FPR" ]]; then
-    echo "✗ keyid.txt 缺少 EMAIL= 或 FPR= 字段" >&2
+    echo "[ERROR] keyid.txt is missing the EMAIL= or FPR= field" >&2
     exit 1
 fi
 
-# ---------- 准备清单 ----------
+# ---------- Build the manifest ----------
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
-# 用 jq 把 hostname/whoami 安全转义为 JSON 字符串 (防 JSON 注入, M-16)
+# Use jq to safely JSON-escape hostname/whoami (guards against JSON
+# injection, M-16).
 if command -v jq >/dev/null 2>&1; then
     HOSTNAME_ESC=$(hostname | jq -Rs '.')
     USER_ESC=$(whoami | jq -Rs '.')
@@ -81,7 +84,7 @@ cat > "$STAGE/EXPORT-MANIFEST.json" <<EOF
 }
 EOF
 
-# 列出要打包的子目录 (相对 REPO_ROOT)
+# List the subdirectories to include (relative to REPO_ROOT).
 SUBDIRS=()
 for d in keys conf db pool; do
     [[ -d "$REPO_ROOT/$d" ]] && SUBDIRS+=("$d")
@@ -91,48 +94,49 @@ if [[ "${INCLUDE_DISTS:-1}" != "0" ]] && [[ -d "$DISTS_DIR" ]]; then
 fi
 
 if [[ ${#SUBDIRS[@]} -eq 0 ]]; then
-    echo "✗ 没有可打包的内容" >&2
+    echo "[ERROR] Nothing to bundle" >&2
     exit 1
 fi
 
-# ---------- 打包 ----------
+# ---------- Pack ----------
 mkdir -p "$(dirname "$OUT")"
 
-# 把子目录软链到 STAGE, 然后从 STAGE 单一目录打包.
-# tar 多个 -C 不可靠 (GNU tar 后面的 -C 会被当文件参数),
-# 用 -h (dereference) 让 tar 跟踪 symlink, 把内容而不是 symlink 本身
-# 写入 archive. EXPORT-MANIFEST.json 在 STAGE 里就是真文件, 必须是第一条目
-# (import 时先读它), 所以写在数组最前.
+# Symlink each subdir into STAGE, then archive from STAGE in a single
+# root. Multiple -C flags in tar are not reliable (GNU tar treats
+# later -C as a filename), so use -h (dereference) to follow symlinks
+# and write the real contents, not the symlinks themselves.
+# EXPORT-MANIFEST.json in STAGE is a real file and must be the first
+# entry (import reads it first), so it sits at the head of the array.
 for d in "${SUBDIRS[@]}"; do
     ln -s "$REPO_ROOT/$d" "$STAGE/$d"
 done
 TAR_ARGS=(EXPORT-MANIFEST.json "${SUBDIRS[@]}")
 (cd "$STAGE" && tar -czhf "$OUT" "${TAR_ARGS[@]}")
 
-# ---------- 自检 ----------
+# ---------- Self-check ----------
 ARCHIVE_SHA="$(sha256sum "$OUT" | awk '{print $1}')"
 ARCHIVE_SIZE="$(stat -c %s "$OUT" 2>/dev/null || stat -f %z "$OUT")"
 ARCHIVE_FILES="$(tar -tzf "$OUT" | wc -l)"
 
-# 验证 tar 内容
+# Verify the tar contents
 TAR_FIRST="$(tar -tzf "$OUT" | head -1)"
 if [[ "$TAR_FIRST" != "EXPORT-MANIFEST.json" ]]; then
-    echo "✗ 打包异常: 第一个条目是 '$TAR_FIRST', 不是 EXPORT-MANIFEST.json" >&2
+    echo "[ERROR] Archive looks wrong: first entry is '$TAR_FIRST', not EXPORT-MANIFEST.json" >&2
     rm -f "$OUT"
     exit 1
 fi
 
 echo ""
-echo "✓ 导出完成: $OUT"
-echo "  大小:      $(du -h "$OUT" | awk '{print $1}') ($ARCHIVE_SIZE bytes)"
-echo "  文件数:    $ARCHIVE_FILES"
-echo "  SHA256:    $ARCHIVE_SHA"
-echo "  GPG:       $EMAIL"
-echo "  包含:      ${SUBDIRS[*]}"
+echo "[OK]    Export complete: $OUT"
+echo "        Size:      $(du -h "$OUT" | awk '{print $1}') ($ARCHIVE_SIZE bytes)"
+echo "        File count: $ARCHIVE_FILES"
+echo "        SHA256:    $ARCHIVE_SHA"
+echo "        GPG:       $EMAIL"
+echo "        Contains:  ${SUBDIRS[*]}"
 echo ""
-echo "迁移流程:"
-echo "  1. 把 $OUT 安全传到新机器 (scp / 加密 U 盘 / password manager 附件)"
-echo "  2. 新机器运行: ./local-repo/scripts/migrate-import.sh $OUT"
-echo "  3. 导入后 export CLOUD_APT_ROOT=\$(默认 ~/cloud-apt)"
+echo "Migration steps:"
+echo "  1. Transfer $OUT to the new host securely (scp / encrypted USB / password manager attachment)"
+echo "  2. On the new host, run: ./local-repo/scripts/migrate-import.sh $OUT"
+echo "  3. After import, export CLOUD_APT_ROOT=\$(default ~/cloud-apt)"
 echo ""
-echo "⚠ 私钥在包内仍是 passphrase 加密 (private.key.gpg), 务必保管好 passphrase"
+echo "[WARN]  The private key in the bundle is still passphrase-encrypted (private.key.gpg); keep the passphrase safe"

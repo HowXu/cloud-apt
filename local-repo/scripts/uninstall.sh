@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# cloud-apt 客户端一键卸载脚本
-# 用法:
+# cloud-apt client one-shot uninstall script.
+# Usage:
 #   curl -fsSL https://<your-domain>/uninstall.sh | sudo bash
 #   curl -fsSL https://<your-domain>/uninstall.sh | sudo CLOUD_APT_PURGE=hello,foo bash
 #   curl -fsSL https://<your-domain>/uninstall.sh | sudo CLOUD_APT_PURGE=all bash
 #
-# 删除 /etc/apt/sources.list.d/cloud-apt.sources (deb822)
-# 删除 /usr/share/keyrings/cloud-apt-archive-keyring.gpg
-# 可选: 卸载从此仓库安装的包 (CLOUD_APT_PURGE=逗号分隔包名, 或 "all" 卸载所有)
+# Removes /etc/apt/sources.list.d/cloud-apt.sources (deb822).
+# Removes /usr/share/keyrings/cloud-apt-archive-keyring.gpg.
+# Optional: purges packages installed from this repo
+# (CLOUD_APT_PURGE=comma-separated list, or "all" to remove everything).
 set -euo pipefail
 
 KEYRING=/usr/share/keyrings/cloud-apt-archive-keyring.gpg
@@ -15,13 +16,14 @@ SRC_DEB822=/etc/apt/sources.list.d/cloud-apt.sources
 SRC_ONELINE=/etc/apt/sources.list.d/cloud-apt.list
 LIST=/etc/apt/sources.list
 
-echo "→ 卸载 cloud-apt 仓库"
+echo "[INFO]  Uninstalling cloud-apt"
 
-# 1. 可选: 卸载包
+# 1. Optional: purge packages
 if [[ -n "${CLOUD_APT_PURGE:-}" ]]; then
     if [[ "${CLOUD_APT_PURGE}" == "all" ]]; then
-        echo "  找出从此仓库安装的所有包..."
-        # 检查 sources 是否还在 (如果已删, 我们没法知道来源, 所以跳过)
+        echo "        Looking up every package installed from this repo..."
+        # If the sources file is already gone, we cannot know the origin,
+        # so skip.
         if [[ -f "$SRC_DEB822" || -f "$SRC_ONELINE" ]]; then
             mapfile -t PKGS < <(dpkg-query -W -f='${Package}\n' 2>/dev/null | while read -r p; do
                 if apt-cache show "$p" 2>/dev/null | grep -q '^Origin: cloud-apt$'; then
@@ -29,61 +31,63 @@ if [[ -n "${CLOUD_APT_PURGE:-}" ]]; then
                 fi
             done || true)
             if [[ ${#PKGS[@]} -gt 0 ]]; then
-                echo "  候选卸载包: ${PKGS[*]}"
+                echo "        Candidate packages to purge: ${PKGS[*]}"
                 if [[ "${YES:-}" != "1" ]]; then
                     read -rp "Confirm purge? [y/N] " ans
                     if [[ ! "$ans" =~ ^[Yy]$ ]]; then
-                        echo "✗ 已取消"
+                        echo "Canceled"
                         exit 1
                     fi
                 fi
                 sudo apt purge -y "${PKGS[@]}"
             else
-                echo "  没找到任何 cloud-apt 来源的包"
+                echo "        No packages from cloud-apt were found"
             fi
         else
-            echo "  ⚠ sources 已删除, 无法判断包来源, 跳过"
+            echo "[WARN]  Sources file is already gone; cannot determine package origin, skipping"
         fi
     else
         mapfile -t PKGS < <(printf '%s\n' "${CLOUD_APT_PURGE//,/ }")
-        echo "  卸载包: ${PKGS[*]}"
+        echo "        Purging packages: ${PKGS[*]}"
         sudo apt purge -y "${PKGS[@]}"
     fi
 fi
 
-# 2. 删除 sources (deb822 新格式)
+# 2. Remove sources (modern deb822)
 if [[ -f "$SRC_DEB822" ]]; then
-    echo "  删 $SRC_DEB822"
+    echo "        Remove $SRC_DEB822"
     sudo rm -f "$SRC_DEB822"
 fi
 
-# 3. 删除可能残留的旧式 sources.list 条目
+# 3. Remove any legacy one-line sources entry, if present.
 if [[ -f "$SRC_ONELINE" ]]; then
-    echo "  删 $SRC_ONELINE"
+    echo "        Remove $SRC_ONELINE"
     sudo rm -f "$SRC_ONELINE"
 fi
 
 if [[ -f "$LIST" ]] && grep -q 'cloud-apt' "$LIST"; then
-    echo "  ⚠ $LIST 含 cloud-apt 残留行, 需手动清理"
+    echo "[WARN]  $LIST still contains cloud-apt lines; clean it up manually"
 fi
 
-# 4. 删除 keyring
+# 4. Remove the keyring.
 if [[ -f "$KEYRING" ]]; then
-    echo "  删 $KEYRING"
+    echo "        Remove $KEYRING"
     sudo rm -f "$KEYRING"
 fi
 
-# 5. 刷新 apt 缓存 (sources 删了, 原 cloud-apt 仓库的包不会再出现)
+# 5. Refresh apt cache (sources are gone, cloud-apt packages will no
+# longer appear).
 sudo apt update || true
 
-# 6. 清掉从此仓库下载的 deb 缓存 (无害, 不影响其它来源)
+# 6. Clean the downloaded .deb cache for this repo (harmless and does
+# not affect other sources).
 sudo apt-get clean
 
 echo ""
-echo "✓ cloud-apt 已卸载"
+echo "[OK]    cloud-apt has been uninstalled"
 echo ""
 if [[ -z "${CLOUD_APT_PURGE:-}" ]]; then
-    echo "提示: 想同时卸载从此仓库装的包, 重跑时加:"
+    echo "Tip: to also purge packages installed from this repo, re-run with:"
     echo "  curl -fsSL https://<your-domain>/uninstall.sh | sudo CLOUD_APT_PURGE=hello,foo bash"
     echo "  curl -fsSL https://<your-domain>/uninstall.sh | sudo CLOUD_APT_PURGE=all bash"
 fi
