@@ -23,12 +23,12 @@ def export_repository(root, archive, include_dists=True):
     root, archive = Path(root).resolve(), Path(archive).resolve()
     for name in ('keys', 'conf', 'db', 'pool'):
         if not (root / name).is_dir():
-            raise RuntimeError(f'缺少状态目录: {name}')
+            raise RuntimeError(f'missing state directory: {name}')
     for name in KEY_FILES:
         if not (root / 'keys' / name).is_file():
-            raise RuntimeError(f'缺少密钥文件: {name}')
+            raise RuntimeError(f'missing key file: {name}')
     if any(archive.is_relative_to(root / name) for name in STATE_DIRS):
-        raise RuntimeError('备份输出不能位于被打包的状态子目录内')
+        raise RuntimeError('archive output cannot be inside a packed state subdirectory')
     with repo_lock(root):
         fingerprint = key_fingerprint(root)
         entries = []
@@ -39,15 +39,37 @@ def export_repository(root, archive, include_dists=True):
             if not folder.exists():
                 continue
             if folder.is_symlink():
-                raise RuntimeError(f'状态目录不能是符号链接: {folder}')
+                raise RuntimeError(f'state directory cannot be a symlink: {folder}')
             entries.append(folder)
             for path in sorted(folder.rglob('*')):
                 if path.is_symlink() or not (path.is_file() or path.is_dir()):
-                    raise RuntimeError(f'状态目录含链接或特殊文件: {path}')
+                    raise RuntimeError(f'state directory contains links or special files: {path}')
                 if name == 'keys' and path.relative_to(folder).as_posix() not in KEY_FILES:
                     continue  # Never export plaintext private-key leftovers.
                 entries.append(path)
+        config_env = root / 'config.env'
+        config_env_gpg = None
+        if config_env.is_file() and not config_env.is_symlink():
+            keyid_txt = (root / 'keys' / 'keyid.txt').read_text()
+            email = next((line.split('=', 1)[1] for line in keyid_txt.splitlines()
+                          if line.startswith('EMAIL=')), None)
+            if email:
+                config_env_gpg = root / 'config.env.gpg'
+                try:
+                    subprocess.run([
+                        'gpg', '--batch', '--yes',
+                        '--no-default-keyring',
+                        '--keyring', str(root / 'keys' / 'public.key'),
+                        '--trust-model', 'always',
+                        '--output', str(config_env_gpg),
+                        '--encrypt', '--recipient', email,
+                        str(config_env),
+                    ], check=True, capture_output=True)
+                    entries.append(config_env_gpg)
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    config_env_gpg = None
         manifest = {'magic': MAGIC, 'version': 2, 'gpg_fpr': fingerprint, 'include_dists': include_dists,
+                    'has_config': config_env_gpg is not None,
                     'files': {p.relative_to(root).as_posix(): {'sha256': sha256(p), 'size': p.stat().st_size}
                               for p in entries if p.is_file()}}
         archive.parent.mkdir(parents=True, exist_ok=True)
@@ -65,7 +87,9 @@ def export_repository(root, archive, include_dists=True):
             os.replace(temporary, archive)
         finally:
             Path(temporary).unlink(missing_ok=True)
-    print(f'✓ 导出完成: {archive}\nSHA256: {sha256(archive)}')
+            if config_env_gpg and config_env_gpg.exists():
+                config_env_gpg.unlink()
+    print(f'export complete: {archive}\nSHA256: {sha256(archive)}')
 
 
 def extract_checked(archive, stage):
@@ -77,8 +101,8 @@ def extract_checked(archive, stage):
             name = member.name.rstrip('/')
             top = PurePosixPath(name).parts[0] if name else ''
             if not safe_relative(name) or name in names or not (member.isfile() or member.isdir()) or (
-                top not in STATE_DIRS and name != 'EXPORT-MANIFEST.json'):
-                raise RuntimeError(f'备份含不安全或重复条目: {member.name}')
+                top not in STATE_DIRS and name != 'EXPORT-MANIFEST.json' and name != 'config.env.gpg'):
+                raise RuntimeError(f'archive contains unsafe or duplicate entry: {member.name}')
             names.add(name)
         for member in members:
             target = stage / member.name
@@ -91,27 +115,27 @@ def extract_checked(archive, stage):
                 target.chmod(member.mode & 0o777)
     manifest = json.loads((stage / 'EXPORT-MANIFEST.json').read_text())
     if manifest.get('magic') != MAGIC or manifest.get('version', 1) not in (1, 2):
-        raise RuntimeError('不支持的备份格式')
+        raise RuntimeError('unsupported archive format')
     for name in ('keys', 'conf', 'db', 'pool'):
         if not (stage / name).is_dir():
-            raise RuntimeError(f'备份不完整: 缺少 {name}')
+            raise RuntimeError(f'archive incomplete: missing {name}')
     if not (stage / 'conf/distributions').is_file():
-        raise RuntimeError('备份缺少 conf/distributions')
+        raise RuntimeError('archive missing conf/distributions')
     for name in KEY_FILES:
         if not (stage / 'keys' / name).is_file():
-            raise RuntimeError(f'备份缺少 keys/{name}')
+            raise RuntimeError(f'archive missing keys/{name}')
     # V1 imports remain supported; V2 additionally verifies all archived file bytes.
     if manifest.get('version') == 2:
         files = {p.relative_to(stage).as_posix(): p for p in stage.rglob('*')
                  if p.is_file() and p.name != 'EXPORT-MANIFEST.json'}
         if set(files) != set(manifest['files']):
-            raise RuntimeError('备份文件清单不完整')
+            raise RuntimeError('archive file list incomplete')
         for name, path in files.items():
             record = manifest['files'][name]
             if path.stat().st_size != record['size'] or sha256(path) != record['sha256']:
-                raise RuntimeError(f'备份文件校验失败: {name}')
+                raise RuntimeError(f'archive file checksum failed: {name}')
     if key_fingerprint(stage) != manifest.get('gpg_fpr', '').upper():
-        raise RuntimeError('Manifest 与密钥指纹不一致')
+        raise RuntimeError('manifest fingerprint does not match keyid')
     (stage / 'keys').chmod(0o700)
     for name in KEY_FILES:
         (stage / 'keys' / name).chmod(0o600)
@@ -150,25 +174,36 @@ def replace_state(target, stage, replace=os.replace):
 def import_repository(archive, target, password, confirm=False):
     archive, target = Path(archive).resolve(), Path(target).resolve()
     if not archive.is_file():
-        raise RuntimeError(f'找不到备份: {archive}')
+        raise RuntimeError(f'archive not found: {archive}')
     target.parent.mkdir(parents=True, exist_ok=True)
     with repo_lock(target):
         if confirm and any((target / name).exists() for name in ('keys', 'db', 'pool')):
-            if input('替换仓库状态并备份旧状态？[y/N] ').lower() != 'y':
-                raise RuntimeError('已取消')
+            if input('replace repo state and back up the old state? [y/N] ').lower() != 'y':
+                raise RuntimeError('cancelled')
         # Read/extract the entire archive before moving any target state.
         with tempfile.TemporaryDirectory(prefix='.cloud-apt-import-', dir=target.parent) as directory:
             stage = Path(directory)
             extract_checked(archive, stage)
-            with signing_home(stage, password):
+            with signing_home(stage, password) as (home, fingerprint):
                 # Check database/pool references before replacing a healthy repository.
                 checked = subprocess.run(['reprepro', '--basedir', str(stage), '--confdir', str(stage / 'conf'), 'check'],
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 if checked.returncode:
-                    raise RuntimeError('备份仓库完整性检查失败: ' + checked.stderr.decode(errors='replace'))
+                    raise RuntimeError('archive repository integrity check failed: ' + checked.stderr.decode(errors='replace'))
+                config_env_gpg = stage / 'config.env.gpg'
+                if config_env_gpg.is_file():
+                    decrypted = subprocess.run([
+                            'gpg', '--homedir', str(home), '--batch', '--yes',
+                            '--output', str(target / 'config.env'),
+                            '--decrypt', str(config_env_gpg),
+                        ], capture_output=True)
+                    if decrypted.returncode == 0:
+                        (target / 'config.env').chmod(0o600)
+                    else:
+                        print(f'warning: config.env.gpg decrypt failed ({decrypted.stderr.decode(errors="replace")[:200]}); set ADMIN_PUSH_TOKEN manually', file=sys.stderr)
             backup = replace_state(target, stage)
-    print(f'✓ 导入完成并通过签名自检: {target}\n旧状态备份: {backup}')
-    print(f'后续发布设置 CLOUD_APT_ROOT={target}；发布器会从 keys/ 恢复隔离的签名环境。')
+    print(f'import complete with signature self-check: {target}\nold state backup: {backup}')
+    print(f'for subsequent publishing set CLOUD_APT_ROOT={target}; the publisher restores an isolated signing environment from keys/')
     return backup
 
 
@@ -193,5 +228,5 @@ if __name__ == '__main__':
     try:
         main()
     except (RuntimeError, ValueError, KeyError, OSError, tarfile.TarError) as error:
-        print(f'✗ {error}', file=sys.stderr)
+        print(f'error: {error}', file=sys.stderr)
         sys.exit(1)

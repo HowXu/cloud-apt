@@ -119,6 +119,48 @@ curl -fsSL https://apt.example.com/install.sh | sudo bash
 sudo apt update && sudo apt install myapp
 ```
 
+## 备份与恢复
+
+迁移、跨机、灾难恢复都靠这两个脚本。生成的 tar.gz **包含所有可恢复状态**——顶部 `EXPORT-MANIFEST.json` 校验 magic + 文件 SHA256，**`config.env` 用仓库自身的 GPG 公钥加密**（tar.gz 里看到的是 `config.env.gpg`，不是明文）。
+
+### 导出仓库状态
+
+```bash
+./local-repo/scripts/migrate-export.sh /safe/path/cloud-apt-export-$(date +%Y%m%d).tar.gz
+```
+
+打包内容：
+- `keys/`（加密私钥 + 公钥 + `keyid.txt`）
+- `conf/`（reprepro 配置）
+- `db/`（reprepro 数据库）
+- `pool/`（包文件）
+- `dists/`（索引 + 签名）
+- `config.env.gpg`（`config.env` 用 `keys/public.key` 的公钥加密后的产物）
+
+**不含** `.publish/`（发布暂存）、脚本本身。
+
+### 导入恢复
+
+```bash
+./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-XXX.tar.gz /new/CLOUD_APT_ROOT
+export CLOUD_APT_ROOT=/new/repository
+./local-repo/scripts/build-and-push.sh --sync kali-rolling
+```
+
+`--sync` 是必须的：它以源机器的当前远端版本为前提重建签名 + 上传，避免覆盖其他维护机的并发发布。
+
+> **不用再跑 `init.sh`**：`config.env` 已由 `migrate-import.sh` 用 GPG 私钥（passphrase 已在导入时输入）解密放回目标位置。
+
+### 跨机迁移完整流程
+
+1. **源机器**：`migrate-export.sh`；把 tar.gz 拷到 U 盘/远端存储
+2. **目标机器**：克隆本仓库
+3. **目标机器**：`migrate-import.sh` 解压 tar.gz
+   - 脚本会**交互提示**输入 GPG passphrase（用于解锁 `keys/private.key.gpg`），同一 passphrase 顺便解密 `config.env.gpg`
+4. **目标机器**：`./local-repo/scripts/build-and-push.sh --sync kali-rolling` 把所有包重新签 + 上传一遍
+
+> 如果源机器的 GPG 私钥已经从 keyring 删了（参见 `gen-key.sh` 文档），但 `keys/private.key.gpg` 加密备份还在——`migrate-import.sh` 依然有效，对称加密只依赖 passphrase、不依赖 keyring 里的私钥。
+
 ## 开发
 
 ```bash

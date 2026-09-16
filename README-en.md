@@ -119,6 +119,48 @@ curl -fsSL https://apt.example.com/install.sh | sudo bash
 sudo apt update && sudo apt install myapp
 ```
 
+## Backup & Restore
+
+For migration, cross-machine moves, or disaster recovery, use these two scripts. The resulting tar.gz is **fully restorable** — the top-level `EXPORT-MANIFEST.json` validates magic and per-file SHA256, and **`config.env` is encrypted with the repo's own GPG public key** (you'll see `config.env.gpg` in the tarball, not plaintext).
+
+### Exporting repo state
+
+```bash
+./local-repo/scripts/migrate-export.sh /safe/path/cloud-apt-export-$(date +%Y%m%d).tar.gz
+```
+
+Bundles:
+- `keys/` (encrypted private key + public key + `keyid.txt`)
+- `conf/` (reprepro config)
+- `db/` (reprepro database)
+- `pool/` (package files)
+- `dists/` (indexes + signatures)
+- `config.env.gpg` (`config.env` encrypted with `keys/public.key`)
+
+**Does not include** `.publish/` (publication staging) or the scripts themselves.
+
+### Importing
+
+```bash
+./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-XXX.tar.gz /new/CLOUD_APT_ROOT
+export CLOUD_APT_ROOT=/new/repository
+./local-repo/scripts/build-and-push.sh --sync kali-rolling
+```
+
+`--sync` is required: it rebuilds signatures and re-uploads against the source machine's current remote release, so it won't overwrite a concurrent publication on another maintainer's machine.
+
+> **No need to run `init.sh`**: `migrate-import.sh` decrypts `config.env.gpg` using the GPG private key (already loaded with the passphrase you entered) and writes it back to the target.
+
+### Full cross-machine migration
+
+1. **Source machine**: `migrate-export.sh`; copy the tar.gz to a USB drive or remote storage
+2. **Target machine**: clone this git repo
+3. **Target machine**: `migrate-import.sh` to extract the tar.gz
+   - The script **interactively prompts** for the GPG passphrase (to unlock `keys/private.key.gpg`); the same passphrase decrypts `config.env.gpg` automatically
+4. **Target machine**: `./local-repo/scripts/build-and-push.sh --sync kali-rolling` to re-sign and re-upload every package
+
+> If the source machine's GPG private key has been deleted from the keyring (see `gen-key.sh` docs) but `keys/private.key.gpg` is still present, `migrate-import.sh` still works — symmetric encryption depends only on the passphrase, not on the keyring's private key.
+
 ## Development
 
 Publishing and migration require Linux, Python 3.10+, reprepro and GnuPG. Deploy the updated Worker before using the updated scripts. Publications are saved locally, uploaded with SHA256 verification, and activated through a conditional R2 pointer update. Failed uploads can be resumed with `build-and-push.sh --resume [suite]`; `--sync [suite]` builds and verifies a fresh full publication. Old by-hash indexes and packages are retained for clients using earlier signed metadata.

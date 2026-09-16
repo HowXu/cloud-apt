@@ -45,14 +45,14 @@ class Remote:
     def upload(self, root, record):
         path = root / record['local']
         if path.stat().st_size != record['size'] or sha256(path) != record['sha256']:
-            raise RuntimeError(f'待发布快照被修改: {path}')
+            raise RuntimeError(f'pending publication snapshot modified: {path}')
         with path.open('rb') as body:
             _, headers = self.request('PUT', '/api/upload/' + urllib.parse.quote(record['key'], safe='/'), body, {
                 'Content-Type': 'application/octet-stream', 'Content-Length': str(record['size']),
                 'X-Content-SHA256': record['sha256'],
             })
         if headers.get('X-Content-SHA256') != record['sha256']:
-            raise RuntimeError('服务器未确认 SHA256；请先部署新版 Worker')
+            raise RuntimeError('server did not confirm SHA256; deploy the new Worker first')
 
     def commit(self, state):
         data = {key: state[key] for key in ('release', 'previous')}
@@ -67,12 +67,12 @@ def release_entries(text):
             if section == 'SHA256':
                 digest, size, name = line.split()
                 if not safe_relative(name) or not re.fullmatch(r'[a-fA-F0-9]{64}', digest):
-                    raise RuntimeError('Release 包含不安全路径或错误哈希')
+                    raise RuntimeError('Release contains unsafe path or wrong hash')
                 entries.append((name, digest.lower(), int(size)))
         elif ':' in line:
             section = line.split(':', 1)[0]
     if not entries:
-        raise RuntimeError('Release 缺少 SHA256 索引')
+        raise RuntimeError('Release missing SHA256 index')
     return entries
 
 
@@ -92,7 +92,7 @@ def prepare_snapshot(root, suite, destination, home, fingerprint, password):
     for name, digest, size in entries:
         original = source / name
         if original.stat().st_size != size or sha256(original) != digest:
-            raise RuntimeError(f'Release 与索引不一致: {name}')
+            raise RuntimeError(f'Release does not match index: {name}')
         copied = target / name
         copied.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(original, copied)
@@ -107,14 +107,14 @@ def prepare_snapshot(root, suite, destination, home, fingerprint, password):
                     raise RuntimeError('Packages 缺少安全的 Filename / SHA256')
                 expected = (fields['SHA256'], int(fields['Size']))
                 if filename in packages and packages[filename] != expected:
-                    raise RuntimeError('同一路径引用了不同的软件包')
+                    raise RuntimeError('same path references different packages')
                 packages[filename] = expected
     if not any(Path(name).name == 'Packages' for name, _, _ in entries):
-        raise RuntimeError('需要 reprepro 导出未压缩 Packages 以验证包引用')
+        raise RuntimeError('reprepro must export uncompressed Packages to verify package references')
     for filename, (digest, size) in packages.items():
         original = root / filename
         if original.stat().st_size != size or sha256(original) != digest:
-            raise RuntimeError(f'缺失或损坏的软件包: {filename}')
+            raise RuntimeError(f'missing or corrupted package: {filename}')
         copied = destination / filename
         copied.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(original, copied)
@@ -164,11 +164,11 @@ def resume(snapshot, remote):
     path = snapshot / 'state.json'
     state = json.loads(path.read_text())
     if state['url'] != remote.url:
-        raise RuntimeError('待发布快照属于另一 Worker，拒绝推送')
+        raise RuntimeError('pending publication snapshot belongs to another Worker; push refused')
     for record in state['files']:
         if record['key'] in state['uploaded']:
             continue
-        print('→ 上传并校验 ' + record['key'], flush=True)
+        print('upload and verify ' + record['key'], flush=True)
         remote.upload(snapshot, record)
         state['uploaded'].append(record['key'])
         atomic_json(path, state)
@@ -176,7 +176,7 @@ def resume(snapshot, remote):
     atomic_json(snapshot.parent / 'last-success.json', {'release': state['release'], 'suite': state['suite']})
     (snapshot.parent / 'pending.json').unlink(missing_ok=True)
     shutil.rmtree(snapshot)  # Only local staging; remote history remains available.
-    print(f"✓ 已完整发布 {state['suite']} ({state['release']})")
+    print(f"ok: published {state['suite']} ({state['release']})")
 
 
 def main():
@@ -208,13 +208,13 @@ def main():
             snapshot = pending.parent / json.loads(pending.read_text())['release']
             old = json.loads((snapshot / 'state.json').read_text())
             if old['suite'] != suite or (not args.resume and old['operation'] != operation):
-                raise RuntimeError('存在另一批未完成发布。先使用 --resume [suite]，或 --sync [suite] 全量重新同步')
+                raise RuntimeError('another pending publication exists; run --resume [suite] or --sync [suite] to fully resync')
             resume(snapshot, remote)
             return
         if args.resume:
-            raise RuntimeError('没有待恢复的发布')
-        if args.remove and os.environ.get('YES') != '1' and input(f'移除 {args.remove}？[y/N] ').lower() != 'y':
-            raise RuntimeError('已取消')
+            raise RuntimeError('no pending publication to resume')
+        if args.remove and os.environ.get('YES') != '1' and input(f'remove {args.remove}? [y/N] ').lower() != 'y':
+            raise RuntimeError('cancelled')
         password = os.environ.get('GPG_PASSPHRASE') or getpass.getpass('GPG passphrase: ')
         resume(create_publication(root, suite, operation, remote, password), remote)
 
@@ -223,5 +223,5 @@ if __name__ == '__main__':
     try:
         main()
     except (RuntimeError, ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
-        print(f'✗ {error}\n发布未确认成功；可重试原命令或使用 --resume，冲突时使用 --sync。', file=sys.stderr)
+        print(f'x {error}\npublication not confirmed; retry or use --resume, --sync on conflict.', file=sys.stderr)
         sys.exit(1)
