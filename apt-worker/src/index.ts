@@ -5,6 +5,7 @@ import { handleUpload } from './upload';
 import { handleIndex, handleSearch } from './api-index';
 import { invalidate } from './cache';
 import { checkAuth } from './shared/auth';
+import { handlePublish } from './releases';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -17,6 +18,7 @@ app.post('/api/invalidate', async (c) => {
 });
 
 app.all('/api/upload/*', (c) => handleUpload(c.req.raw, c.env));
+app.all('/api/publish/:suite', (c) => handlePublish(c.req.raw, c.req.param('suite'), c.env));
 
 app.get('/api/index/:suite/:arch', (c) =>
     handleIndex(c.req.param('suite'), c.req.param('arch'), c.env)

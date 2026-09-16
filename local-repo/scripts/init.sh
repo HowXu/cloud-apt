@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 info "cloud-apt 初始化"
 
 # 1. 依赖检查
-for cmd in curl gpg reprepro mktemp sed; do
+for cmd in curl gpg reprepro python3 mktemp sed; do
     command -v "$cmd" >/dev/null 2>&1 || die "缺少依赖: $cmd (apt install $cmd)"
 done
 

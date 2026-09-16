@@ -1,6 +1,7 @@
 import type { Bindings } from './env';
 import { checkAuth } from './shared/auth';
 import { validateUploadPath, ALLOWED_EXACT } from './shared/path';
+import { digest, isImmutable } from './releases';
 
 export async function handleUpload(req: Request, env: Bindings): Promise<Response> {
     if (req.method !== 'PUT' && req.method !== 'DELETE') {
@@ -12,7 +13,12 @@ export async function handleUpload(req: Request, env: Bindings): Promise<Respons
     }
 
     const url = new URL(req.url);
-    const rawPath = url.pathname.replace(/^\/api\/upload\//, '');
+    let rawPath: string;
+    try {
+        rawPath = decodeURIComponent(url.pathname.replace(/^\/api\/upload\//, ''));
+    } catch {
+        return new Response('Invalid path encoding', { status: 400 });
+    }
 
     const validated = validateUploadPath(rawPath);
     if (!validated.ok) {
@@ -40,8 +46,37 @@ export async function handleUpload(req: Request, env: Bindings): Promise<Respons
             return new Response(`Invalid Content-Type for ${validated.key}`, { status: 400 });
         }
         const body = await req.arrayBuffer();
-        await bucket.put(validated.key, body, { httpMetadata: { contentType } });
+        const sha256 = await digest(body);
+        if (req.headers.has('X-Content-SHA256') && req.headers.get('X-Content-SHA256') !== sha256) {
+            return new Response('Checksum mismatch', { status: 400 });
+        }
+        if (isImmutable(validated.key)) {
+            let saved = await bucket.put(validated.key, body, {
+                onlyIf: { etagDoesNotMatch: '*' }, httpMetadata: { contentType }, customMetadata: { sha256 },
+            });
+            if (!saved) {
+                const existing = await bucket.head(validated.key);
+                let existingHash = existing?.customMetadata?.sha256;
+                if (existing && !existingHash) {
+                    const legacy = await bucket.get(validated.key);
+                    if (legacy) existingHash = await digest(await legacy.arrayBuffer());
+                }
+                if (!existing || existingHash !== sha256) {
+                    return new Response('Immutable file differs; use a new package version', { status: 409 });
+                }
+                // Adopt identical legacy objects without changing their content.
+                if (!existing.customMetadata?.sha256) {
+                    saved = await bucket.put(validated.key, body, { onlyIf: { etagMatches: existing.etag },
+                        httpMetadata: { contentType }, customMetadata: { sha256 } });
+                    if (!saved) return new Response('Concurrent upload; retry', { status: 409 });
+                }
+            }
+        } else {
+            await bucket.put(validated.key, body, { httpMetadata: { contentType }, customMetadata: { sha256 } });
+        }
+        return new Response('OK', { headers: { 'X-Content-SHA256': sha256 } });
     } else {
+        if (isImmutable(validated.key)) return new Response('Retained publication file cannot be deleted', { status: 409 });
         await bucket.delete(validated.key);
     }
 

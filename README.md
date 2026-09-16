@@ -110,7 +110,7 @@ cd cloud-apt
 ./local-repo/scripts/push.sh ../myapp_1.0_amd64.deb
 ```
 
-`push.sh` 会临时提示输入 GPG passphrase, 之后自动完成本地签名、索引生成、变更上传和缓存失效。
+`push.sh` 会临时提示输入 GPG passphrase，随后生成带 by-hash 的签名索引、保存发布快照、上传并校验全部引用文件，最后切换当前版本。中断后可重试原命令或使用 `build-and-push.sh --resume`；发布与迁移的完整说明见 [local-repo/README.md](local-repo/README.md)。升级时先部署新版 Worker，再使用新版发布脚本。
 
 ## 客户端使用
 
