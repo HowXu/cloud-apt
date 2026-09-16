@@ -85,7 +85,8 @@ describe('handleIndex', () => {
         };
         const r = await handleIndex('foo bar', 'amd64', env);
         expect(r.status).toBe(400);
-        expect(await r.text()).toBe('Invalid suite');
+        expect(r.headers.get('Content-Type')).toContain('application/json');
+        expect(await r.json()).toEqual({ packages: [], error: 'Invalid suite' });
     });
 });
 
@@ -124,4 +125,24 @@ test('handleSearch returns empty array when R2 get throws', async () => {
     const r = await handleSearch('kali-rolling', 'amd64', 'hello', env);
     expect(r.status).toBe(200);
     expect(await r.json()).toEqual({ packages: [] });
+});
+
+test('handleIndex returns JSON error envelope on invalid arch', async () => {
+    const env = {
+        APT_BUCKET: { get: () => Promise.resolve(null) },
+    } as unknown as Bindings;
+    const r = await handleIndex('kali-rolling', 'riscv64', env);
+    expect(r.status).toBe(400);
+    expect(r.headers.get('Content-Type')).toContain('application/json');
+    expect(await r.json()).toEqual({ packages: [], error: 'Invalid arch' });
+});
+
+test('handleSearch returns JSON error envelope on invalid suite', async () => {
+    const env = {
+        APT_BUCKET: { get: () => Promise.resolve(null) },
+    } as unknown as Bindings;
+    const r = await handleSearch('../etc/passwd', 'amd64', 'hello', env);
+    expect(r.status).toBe(400);
+    expect(r.headers.get('Content-Type')).toContain('application/json');
+    expect(await r.json()).toEqual({ packages: [], error: 'Invalid suite' });
 });
