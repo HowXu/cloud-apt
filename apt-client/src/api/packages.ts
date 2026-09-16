@@ -2,11 +2,19 @@ import type { IndexResponse, PackageEntry } from '../types';
 
 const BASE = '';
 
+async function parseIndex(r: Response): Promise<PackageEntry[]> {
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+    const ct = r.headers.get('Content-Type') || '';
+    if (!ct.includes('application/json')) {
+        throw new Error(`expected JSON, got "${ct || 'no content-type'}" (HTTP ${r.status})`);
+    }
+    const json = (await r.json()) as IndexResponse;
+    return json.packages ?? [];
+}
+
 export async function fetchIndex(suite: string, arch: string): Promise<PackageEntry[]> {
     const r = await fetch(`${BASE}/api/index/${suite}/${arch}`);
-    if (!r.ok) throw new Error(`fetchIndex failed: ${r.status}`);
-    const json = (await r.json()) as IndexResponse;
-    return json.packages;
+    return parseIndex(r);
 }
 
 export async function searchPackages(
@@ -15,9 +23,7 @@ export async function searchPackages(
     query: string
 ): Promise<PackageEntry[]> {
     const r = await fetch(`${BASE}/api/index/${suite}/${arch}/search?q=${encodeURIComponent(query)}`);
-    if (!r.ok) throw new Error(`searchPackages failed: ${r.status}`);
-    const json = (await r.json()) as IndexResponse;
-    return json.packages;
+    return parseIndex(r);
 }
 
 export function formatSize(bytes: number): string {
