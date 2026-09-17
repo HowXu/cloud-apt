@@ -145,6 +145,7 @@ def extract_checked(archive, stage):
 
 def replace_state(target, stage, replace=os.replace):
     """Replace state directories only, and roll back all completed moves on failure."""
+    local_repo = target / 'local-repo'
     backup = target.parent / (target.name + '.bak.' + uuid.uuid4().hex)
     backup.mkdir(mode=0o700)
     saved, installed = [], []
@@ -174,13 +175,13 @@ def replace_state(target, stage, replace=os.replace):
             replace(config_env_src, config_env_dst)
             installed.append('config.env')
     except BaseException:
+        # config.env lives under local_repo, not directly under target.
         for name in reversed(installed):
-            if name == 'config.env':
-                os.replace(target / name, stage / name)
-            else:
-                os.replace(target / name, stage / name)
+            location = local_repo if name == 'config.env' else target
+            os.replace(location / name, stage / name)
         for name in reversed(saved):
-            os.replace(backup / name, target / name)
+            location = local_repo if name == 'config.env' else target
+            os.replace(backup / name, location / name)
         raise
     return backup
 
