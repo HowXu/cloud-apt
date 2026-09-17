@@ -175,6 +175,7 @@ def replace_state(target, stage, replace=os.replace):
     local_repo = target / 'local-repo'
     backup = target.parent / (target.name + '.bak.' + uuid.uuid4().hex)
     backup.mkdir(mode=0o700)
+    local_repo.mkdir(parents=True, exist_ok=True)
     saved, installed = [], []
     try:
         # Retain the installed source template, even when importing an older archive.
@@ -188,6 +189,7 @@ def replace_state(target, stage, replace=os.replace):
                 replace(current, backup / name)
                 saved.append(name)
             if name != '.publish':
+                current.parent.mkdir(parents=True, exist_ok=True)
                 replace(stage / name, current)
                 installed.append(name)
         # config.env decrypts into stage/; install it into local-repo/ alongside
@@ -213,7 +215,7 @@ def replace_state(target, stage, replace=os.replace):
 def post_import_sync(repo_root, password):
     """Re-sign and re-upload to align an existing dists/ with the remote.
     No-op when dists/ is missing/empty or build-and-push.sh is absent."""
-    dists = repo_root / 'dists'
+    dists = repo_root / 'local-repo' / 'dists'
     if not dists.exists() or not any(dists.iterdir()):
         return
     script = repo_root / 'local-repo' / 'scripts' / 'build-and-push.sh'
@@ -274,7 +276,8 @@ def import_repository(archive, target, password, confirm=False):
                     else:
                         print(f'warning: config.env.gpg decrypt failed ({decrypted.stderr.decode(errors="replace")[:200]}); set ADMIN_PUSH_TOKEN manually', file=sys.stderr)
             backup = replace_state(target, stage)
-        needs_sync = (target / 'dists').exists() and any((target / 'dists').iterdir())
+        needs_sync = (target / 'local-repo' / 'dists').exists() and any(
+            (target / 'local-repo' / 'dists').iterdir())
     if needs_sync:
         post_import_sync(target, password)
     print(f'import complete with signature self-check: {target}\nold state backup: {backup}')

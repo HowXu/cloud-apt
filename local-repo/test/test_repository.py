@@ -89,7 +89,10 @@ class RepositoryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='cloud-apt-test-')
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name) / 'repo'
+        # self.repo is the import target (mirrors a cloned cloud-apt/ tree);
+        # self.root is the local-repo/ inside it, where state and scripts live.
+        self.repo = Path(self.tmp.name) / 'repo'
+        self.root = self.repo / 'local-repo'
         for name in ('conf', 'db', 'pool', 'dists', 'scripts', 'dockerfiles'):
             (self.root / name).mkdir(parents=True)
         shutil.copytree(self.keys, self.root / 'keys')
@@ -193,7 +196,7 @@ class RepositoryTests(unittest.TestCase):
         export_repository(self.root, archive)
         (self.root / 'keys/public.key').write_text('broken key')
         (self.root / '.publish/pending.json').write_text('stale upload')
-        backup = import_repository(archive, self.root, PASSWORD)
+        backup = import_repository(archive, self.repo, PASSWORD)
         self.assertTrue(archive.exists())
         self.assertEqual((self.root / 'scripts/sentinel').read_text(), 'installed tools')
         self.assertEqual((self.root / 'conf/distributions.template').read_text(), 'installed template')
@@ -206,7 +209,7 @@ class RepositoryTests(unittest.TestCase):
         export_repository(self.root, archive)
         (self.root / 'db/sentinel').write_text('keep')
         with self.assertRaises(RuntimeError):
-            import_repository(archive, self.root, 'wrong-password')
+            import_repository(archive, self.repo, 'wrong-password')
         self.assertEqual((self.root / 'db/sentinel').read_text(), 'keep')
 
     def test_restore_without_dists_reexports_successfully(self):
@@ -215,9 +218,9 @@ class RepositoryTests(unittest.TestCase):
         export_repository(self.root, archive, include_dists=False)
         imported = Path(self.tmp.name) / 'new-machine'
         import_repository(archive, imported, PASSWORD)
-        self.assertEqual(list((imported / 'dists').iterdir()), [])
-        with repo_lock(imported):
-            snapshot = create_publication(imported, SUITE, {'mode': 'sync'}, self.remote, PASSWORD)
+        self.assertEqual(list((imported / 'local-repo' / 'dists').iterdir()), [])
+        with repo_lock(imported / 'local-repo'):
+            snapshot = create_publication(imported / 'local-repo', SUITE, {'mode': 'sync'}, self.remote, PASSWORD)
             resume(snapshot, self.remote)
 
     def test_import_rejects_links_and_corruption_before_changing_state(self):
@@ -228,7 +231,7 @@ class RepositoryTests(unittest.TestCase):
             output.addfile(header)
         before = (self.root / 'keys/public.key').read_bytes()
         with self.assertRaises(RuntimeError):
-            import_repository(archive, self.root, PASSWORD)
+            import_repository(archive, self.repo, PASSWORD)
         self.assertEqual((self.root / 'keys/public.key').read_bytes(), before)
         export_repository(self.root, archive)
         rewritten = self.root / 'corrupt.tar.gz'
@@ -240,7 +243,7 @@ class RepositoryTests(unittest.TestCase):
                     member.size = len(data)
                 output.addfile(member, io.BytesIO(data) if data is not None else None)
         with self.assertRaises(RuntimeError):
-            import_repository(rewritten, self.root, PASSWORD)
+            import_repository(rewritten, self.repo, PASSWORD)
         self.assertEqual((self.root / 'keys/public.key').read_bytes(), before)
 
     def test_state_replacement_rolls_back_after_partial_failure(self):
@@ -255,7 +258,7 @@ class RepositoryTests(unittest.TestCase):
                 raise OSError('simulated disk failure')
             os.replace(source, destination)
         with self.assertRaises(OSError):
-            replace_state(self.root, stage, failing_replace)
+            replace_state(self.repo, stage, failing_replace)
         self.assertEqual((self.root / 'keys/public.key').read_bytes(), before)
         self.assertFalse((self.root / 'conf/new').exists())
         self.assertTrue((self.root / 'scripts/sentinel').exists())
