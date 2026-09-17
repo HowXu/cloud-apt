@@ -56,17 +56,22 @@ def export_repository(root, archive, include_dists=True):
             if email:
                 config_env_gpg = root / 'config.env.gpg'
                 try:
-                    subprocess.run([
-                        'gpg', '--batch', '--yes',
-                        '--no-default-keyring',
-                        '--keyring', str(root / 'keys' / 'public.key'),
-                        '--trust-model', 'always',
-                        '--output', str(config_env_gpg),
-                        '--encrypt', '--recipient', email,
-                        str(config_env),
-                    ], check=True, capture_output=True)
+                    with tempfile.TemporaryDirectory(prefix='cloud-apt-export-gpg-') as keyring_home:
+                        keyring_home_path = Path(keyring_home)
+                        keyring_home_path.chmod(0o700)
+                        subprocess.run([
+                            'gpg', '--homedir', str(keyring_home_path), '--batch', '--yes',
+                            '--import', str(root / 'keys' / 'public.key'),
+                        ], check=True, capture_output=True)
+                        subprocess.run([
+                            'gpg', '--homedir', str(keyring_home_path), '--batch', '--yes',
+                            '--trust-model', 'always',
+                            '--output', str(config_env_gpg),
+                            '--encrypt', '--recipient', email,
+                            str(config_env),
+                        ], check=True, capture_output=True)
                     entries.append(config_env_gpg)
-                except (subprocess.CalledProcessError, FileNotFoundError):
+                except (subprocess.CalledProcessError, FileNotFoundError, OSError):
                     config_env_gpg = None
         manifest = {'magic': MAGIC, 'version': 2, 'gpg_fpr': fingerprint, 'include_dists': include_dists,
                     'has_config': config_env_gpg is not None,
