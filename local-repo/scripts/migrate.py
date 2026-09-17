@@ -193,17 +193,25 @@ def replace_state(target, stage, replace=os.replace):
 
 def post_import_sync(repo_root, password):
     """Re-sign and re-upload to align an existing dists/ with the remote.
-    No-op when dists/ is missing or empty (fresh deploy, or INCLUDE_DISTS=0)."""
+    No-op when dists/ is missing/empty or build-and-push.sh is absent."""
     dists = repo_root / 'dists'
     if not dists.exists() or not any(dists.iterdir()):
         return
-    proc = subprocess.Popen(
-        ['./local-repo/scripts/build-and-push.sh', '--sync', 'kali-rolling'],
-        cwd=str(repo_root),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    script = repo_root / 'local-repo' / 'scripts' / 'build-and-push.sh'
+    if not script.is_file():
+        return  # partial repo (e.g. test fixture); user can run --sync manually
+    try:
+        proc = subprocess.Popen(
+            ['./local-repo/scripts/build-and-push.sh', '--sync', 'kali-rolling'],
+            cwd=str(repo_root),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as error:
+        print(f'warning: post-import --sync could not start ({error}); you may run it manually',
+              file=sys.stderr)
+        return
     stdout, stderr = proc.communicate(input=(password + '\n').encode())
     if proc.returncode != 0:
         message = stderr.decode(errors='replace')[:500] or stdout.decode(errors='replace')[:500]
@@ -243,7 +251,9 @@ def import_repository(archive, target, password, confirm=False):
                     else:
                         print(f'warning: config.env.gpg decrypt failed ({decrypted.stderr.decode(errors="replace")[:200]}); set ADMIN_PUSH_TOKEN manually', file=sys.stderr)
             backup = replace_state(target, stage)
-            post_import_sync(target, password)
+            dists = target / 'dists'
+            if dists.exists() and any(dists.iterdir()):
+                post_import_sync(target, password)
     print(f'import complete with signature self-check: {target}\nold state backup: {backup}')
     print(f'for subsequent publishing set CLOUD_APT_ROOT={target}; the publisher restores an isolated signing environment from keys/')
     return backup
