@@ -286,15 +286,19 @@ def main():
     parser.add_argument('archive', nargs='?')
     parser.add_argument('target', nargs='?')
     args = parser.parse_args()
-    root = Path(os.environ.get('CLOUD_APT_ROOT', Path(__file__).resolve().parents[2])).resolve()
+    here = Path(__file__).resolve()
+    local_repo = here.parents[1]
+    repo_root = here.parents[2]
     if args.mode == 'export':
+        root = Path(os.environ.get('CLOUD_APT_ROOT', local_repo)).resolve()
         archive = args.archive or str(root / ('cloud-apt-export-' + uuid.uuid4().hex + '.tar.gz'))
         export_repository(root, archive, os.environ.get('INCLUDE_DISTS') != '0')
     else:
         if not args.archive:
             parser.error('import requires a backup path')
         password = os.environ.get('GPG_PASSPHRASE') or getpass.getpass('GPG passphrase: ')
-        import_repository(args.archive, args.target or root, password, os.environ.get('YES') != '1')
+        target = Path(args.target or os.environ.get('CLOUD_APT_ROOT', repo_root)).resolve()
+        import_repository(args.archive, target, password, os.environ.get('YES') != '1')
 
 
 if __name__ == '__main__':
