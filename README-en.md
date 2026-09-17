@@ -157,14 +157,16 @@ Bundles:
 ### Importing
 
 ```bash
-./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-XXX.tar.gz /new/CLOUD_APT_ROOT
-export CLOUD_APT_ROOT=/new/repository
-./local-repo/scripts/build-and-push.sh --sync kali-rolling
+./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-XXX.tar.gz
+./local-repo/scripts/push.sh path/to/package.deb
 ```
 
-`--sync` is required: it rebuilds signatures and re-uploads against the source machine's current remote release, so it won't overwrite a concurrent publication on another maintainer's machine.
+The import script automatically:
+- Decrypts `config.env.gpg` with the GPG private key (the passphrase you entered during import) into `local-repo/config.env`
+- Replaces the state subdirectories
+- If `dists/` is non-empty, runs `./local-repo/scripts/build-and-push.sh --sync kali-rolling` automatically (a failure is just a warning)
 
-> **No need to run `init.sh`**: `migrate-import.sh` decrypts `config.env.gpg` using the GPG private key (already loaded with the passphrase you entered) and writes it back to the target.
+**No need to run `init.sh`**, and **no need to invoke `--sync` manually**.
 
 ### Full cross-machine migration
 
@@ -172,7 +174,7 @@ export CLOUD_APT_ROOT=/new/repository
 2. **Target machine**: clone this git repo
 3. **Target machine**: `migrate-import.sh` to extract the tar.gz
    - The script **interactively prompts** for the GPG passphrase (to unlock `keys/private.key.gpg`); the same passphrase decrypts `config.env.gpg` automatically
-4. **Target machine**: `./local-repo/scripts/build-and-push.sh --sync kali-rolling` to re-sign and re-upload every package
+4. **Target machine**: run `./local-repo/scripts/push.sh path/to/package.deb` directly
 
 > If the source machine's GPG private key has been deleted from the keyring (see `gen-key.sh` docs) but `keys/private.key.gpg` is still present, `migrate-import.sh` still works — symmetric encryption depends only on the passphrase, not on the keyring's private key.
 

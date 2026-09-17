@@ -157,14 +157,16 @@ sudo apt update && sudo apt install myapp
 ### 导入恢复
 
 ```bash
-./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-XXX.tar.gz /new/CLOUD_APT_ROOT
-export CLOUD_APT_ROOT=/new/repository
-./local-repo/scripts/build-and-push.sh --sync kali-rolling
+./local-repo/scripts/migrate-import.sh /path/to/cloud-apt-export-XXX.tar.gz
+./local-repo/scripts/push.sh path/to/package.deb
 ```
 
-`--sync` 是必须的：它以源机器的当前远端版本为前提重建签名 + 上传，避免覆盖其他维护机的并发发布。
+导入脚本会自动：
+- 用 GPG 私钥（passphrase 已在导入时输入）解密 `config.env.gpg` 到 `local-repo/config.env`
+- 替换 state 子目录
+- 在 `dists/` 非空时自动跑 `./local-repo/scripts/build-and-push.sh --sync kali-rolling`（失败仅警告）
 
-> **不用再跑 `init.sh`**：`config.env` 已由 `migrate-import.sh` 用 GPG 私钥（passphrase 已在导入时输入）解密放回目标位置。
+**不需要** 跑 `init.sh`，**不需要** 手动 `--sync`。
 
 ### 跨机迁移完整流程
 
@@ -172,7 +174,7 @@ export CLOUD_APT_ROOT=/new/repository
 2. **目标机器**：克隆本仓库
 3. **目标机器**：`migrate-import.sh` 解压 tar.gz
    - 脚本会**交互提示**输入 GPG passphrase（用于解锁 `keys/private.key.gpg`），同一 passphrase 顺便解密 `config.env.gpg`
-4. **目标机器**：`./local-repo/scripts/build-and-push.sh --sync kali-rolling` 把所有包重新签 + 上传一遍
+4. **目标机器**：直接 `./local-repo/scripts/push.sh path/to/package.deb`
 
 > 如果源机器的 GPG 私钥已经从 keyring 删了（参见 `gen-key.sh` 文档），但 `keys/private.key.gpg` 加密备份还在——`migrate-import.sh` 依然有效，对称加密只依赖 passphrase、不依赖 keyring 里的私钥。
 

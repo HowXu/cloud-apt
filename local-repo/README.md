@@ -88,33 +88,43 @@ should re-run `apt update`.
 
 ```bash
 ./local-repo/scripts/migrate-export.sh /safe/path/repository.tar.gz
-./local-repo/scripts/migrate-import.sh /safe/path/repository.tar.gz /new/repository
-export CLOUD_APT_ROOT=/new/repository
-./local-repo/scripts/build-and-push.sh --sync kali-rolling
+./local-repo/scripts/migrate-import.sh /safe/path/repository.tar.gz
+# → enter GPG passphrase once
+# → config.env decrypted into local-repo/config.env
+# → state dirs replaced; --sync auto-runs if dists/ has content
+./local-repo/scripts/push.sh path/to/package.deb   # ready to go
 ```
 
-Export covers only `keys/`, `conf/`, `db/`, `pool/`, `dists/` — no
-token, no staging, no scripts. V2 backups record a SHA256 per file
-(V1 archives still import). `INCLUDE_DISTS=0` skips indexes; recover
-them later with `--sync`.
+Export covers only `keys/`, `conf/`, `db/`, `pool/`, `dists/` and
+`config.env.gpg` — no token, no staging, no scripts. V2 backups record
+a SHA256 per file (V1 archives still import). `INCLUDE_DISTS=0` skips
+indexes; recover them later by re-running `migrate-import` on the same
+archive (the script will skip `--sync` because `dists/` is empty).
 
 Import extracts next to the target, refuses path traversal, links,
 special files, and duplicate entries; only after verifying the
 manifest, key fingerprint, decrypted private key, signature
 self-check, and reprepro database references does it replace the
-state subdirectories. Backups stored inside the target still work.
-Scripts, Dockerfile, host config, and existing templates are preserved;
-the old state and old publish staging are saved to
+state subdirectories. `config.env` is decrypted into
+`local-repo/config.env` so `push.sh` works immediately. The
+old state and old publish staging are saved to
 `<target>.bak.<unique-suffix>`. Catchable errors during the swap roll
 back automatically; on power loss / SIGKILL, keep that backup and
 recover by hand.
+
+After `replace_state`, if the target's `dists/` already has content,
+the import script automatically runs
+`./local-repo/scripts/build-and-push.sh --sync kali-rolling` so the
+remote state matches the imported repository. The same GPG passphrase
+is piped in via stdin; a `--sync` failure is a warning, not a fatal
+error — you may re-run `--sync` manually.
 
 Both publisher and migration use a temporary isolated GPG keyring,
 restoring the requested private key from the encrypted backup. They
 do not depend on the new host's user keyring and never import private
 keys globally. Passphrases go to GPG via stdin, and the temporary
-agent is destroyed on exit. After recovery, reconfigure Worker URL
-and token.
+agent is destroyed on exit. **No need to run `init.sh` on the target
+machine** — `config.env` arrives via the archive.
 
 ## Regression tests (Linux)
 
