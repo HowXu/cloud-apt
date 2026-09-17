@@ -10,16 +10,17 @@ commands cover everything:
 
 ## Tool requirements
 
-- reprepro (`apt install reprepro`)
-- GPG 2.x (`apt install gnupg2`)
-- curl (`apt install curl`)
-- Python 3.10+ (`apt install python3`; the publisher and migrate use only the standard library, no pip dependencies)
-- podman (optional, for containerised builds)
+- reprepro
+- GPG 2.x
+- curl
+- Python 3.10+,the publisher and migrate use only the standard library, no pip dependencies
 
 ## Configuration
 
 `init.sh` writes the Worker URL and upload token to
-`local-repo/config.env` (mode 600). The GPG passphrase is never written
+`local-repo/config.env`. 
+
+The GPG passphrase is never written
 to disk — `push.sh` prompts for it on each invocation.
 
 CI environments can drop a `local-repo/config.env` directly:
@@ -32,7 +33,9 @@ ADMIN_PUSH_TOKEN="..."
 ## Advanced entry points
 
 `build-and-push.sh --remove <pkg>` and `--sync` are still available for
-advanced maintenance. For migration use `migrate-export.sh` /
+advanced maintenance.
+
+For migration use `migrate-export.sh` /
 `migrate-import.sh`.
 
 ## Publishing, retry, and version consistency
@@ -79,8 +82,7 @@ version/filename.** Removal only drops the package from new indexes;
 old files are not auto-reclaimed, to avoid breaking in-flight
 downloads.
 
-Clients need to support `InRelease` and by-hash (modern
-Debian/Ubuntu/Kali APT do). Clients that disable by-hash or use
+Clients need to support `InRelease` and by-hash. Clients that disable by-hash or use
 detached signatures only may catch a publish switch mid-update and
 should re-run `apt update`.
 
@@ -97,9 +99,9 @@ should re-run `apt update`.
 
 Export covers only `keys/`, `conf/`, `db/`, `pool/`, `dists/` and
 `config.env.gpg` — no token, no staging, no scripts. V2 backups record
-a SHA256 per file (V1 archives still import). `INCLUDE_DISTS=0` skips
+a SHA256 per file. `INCLUDE_DISTS=0` skips
 indexes; recover them later by re-running `migrate-import` on the same
-archive (the script will skip `--sync` because `dists/` is empty).
+archive. the script will skip `--sync` because `dists/` is empty.
 
 Import extracts next to the target, refuses path traversal, links,
 special files, and duplicate entries; only after verifying the
@@ -126,7 +128,7 @@ keys globally. Passphrases go to GPG via stdin, and the temporary
 agent is destroyed on exit. **No need to run `init.sh` on the target
 machine** — `config.env` arrives via the archive.
 
-## Regression tests (Linux)
+## Regression tests
 
 ```bash
 sudo apt-get install reprepro gnupg python3

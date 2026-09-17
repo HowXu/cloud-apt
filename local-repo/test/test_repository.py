@@ -33,7 +33,7 @@ class FakeRemote:
     def current(self, suite):
         return {'etag': self.active, 'release': self.active}
 
-    def upload(self, root, record):
+    def upload(self, root, record, on_progress=None):
         self.calls.append(record['key'])
         if self.fail_key and self.fail_key in record['key']:
             self.fail_key = None

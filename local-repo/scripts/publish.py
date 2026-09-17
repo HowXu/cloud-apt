@@ -9,10 +9,35 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 import uuid
 
 from repo_state import atomic_json, gpg, repo_lock, safe_relative, sha256, signing_home
+
+
+def _format_size(n):
+    if n >= 1024 * 1024:
+        return f'{n / 1024 / 1024:.1f} MB'
+    if n >= 1024:
+        return f'{n / 1024:.0f} KB'
+    return f'{n} B'
+
+
+def _format_speed(bps):
+    if bps >= 1024 * 1024:
+        return f'{bps / 1024 / 1024:.1f} MB/s'
+    if bps >= 1024:
+        return f'{bps / 1024:.0f} KB/s'
+    return f'{bps:.0f} B/s'
+
+
+def _progress_line(sent, total):
+    pct = sent / total if total else 1
+    bar_width = 30
+    filled = min(bar_width, int(pct * bar_width))
+    bar = '=' * max(0, filled - 1) + ('>' if filled < bar_width else '=')
+    return f'  {_format_size(sent)} / {_format_size(total)} [{bar.ljust(bar_width)}] {pct * 100:3.0f}%'
 
 
 class Remote:
@@ -64,17 +89,89 @@ class Remote:
         body, _ = self.request('GET', f'/api/publish/{suite}')
         return json.loads(body)
 
-    def upload(self, root, record):
+    def upload(self, root, record, on_progress=None):
         path = root / record['local']
         if path.stat().st_size != record['size'] or sha256(path) != record['sha256']:
             raise RuntimeError(f'pending publication snapshot modified: {path}')
-        with path.open('rb') as body:
-            _, headers = self.request('PUT', '/api/upload/' + urllib.parse.quote(record['key'], safe='/'), body, {
-                'Content-Type': 'application/octet-stream', 'Content-Length': str(record['size']),
-                'X-Content-SHA256': record['sha256'],
-            })
-        if headers.get('x-content-sha256') != record['sha256']:
-            raise RuntimeError('server did not confirm SHA256; deploy the new Worker first')
+        size = record['size']
+        # Stream the body via stdin so callers see bytes flowing in real time.
+        with tempfile.TemporaryDirectory(prefix='cloud-apt-remote-') as directory:
+            body_path, header_path = (os.path.join(directory, name)
+                                      for name in ('body', 'headers'))
+            cmd = ['curl', '-sS', '--max-time', '600', '-X', 'PUT',
+                   '-D', header_path, '-o', body_path,
+                   '-H', 'Content-Type: application/octet-stream',
+                   '-H', f'Content-Length: {size}',
+                   '-H', f'X-Content-SHA256: {record["sha256"]}',
+                   '-H', f'Authorization: Bearer {self.token}',
+                   '--data-binary', '@-',
+                   self.url + '/api/upload/' + urllib.parse.quote(record['key'], safe='/')]
+            start = time.monotonic()
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            chunk_size = 64 * 1024
+            sent = 0
+            last_update = start
+            write_error = None
+            try:
+                with path.open('rb') as body:
+                    while True:
+                        chunk = body.read(chunk_size)
+                        if not chunk:
+                            break
+                        try:
+                            proc.stdin.write(chunk)
+                        except (BrokenPipeError, ValueError, OSError) as error:
+                            write_error = error
+                            break
+                        sent += len(chunk)
+                        if on_progress and time.monotonic() - last_update >= 0.1:
+                            speed = sent / (time.monotonic() - start)
+                            on_progress(sent, size, speed)
+                            last_update = time.monotonic()
+            finally:
+                # Close stdin so curl sees EOF and sends the request.
+                # Python 3.12 subprocess._communicate's self.stdin.flush() raises
+                # ValueError("flush of closed file") when stdin is already
+                # closed; communicate() does NOT swallow it, so we use wait()
+                # directly to avoid that code path.
+                if proc.stdin and not proc.stdin.closed:
+                    try:
+                        proc.stdin.close()
+                    except (BrokenPipeError, ValueError, OSError):
+                        pass
+            try:
+                returncode = proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise RuntimeError(f'upload {record["key"]} timed out after 30s')
+            stderr_data = proc.stderr.read() if proc.stderr else b''
+            elapsed = time.monotonic() - start
+            if on_progress:
+                speed = sent / elapsed if elapsed > 0 else 0
+                on_progress(sent, size, speed, done=True)
+            if write_error or returncode != 0:
+                detail = stderr_data.decode(errors='replace')[:500]
+                cause = f' ({write_error})' if write_error else ''
+                raise RuntimeError(f'upload {record["key"]} failed (curl exit {returncode}){cause}: {detail}')
+            with open(header_path) as sink:
+                lines = sink.read().splitlines()
+            try:
+                status = int(lines[0].split()[1])
+            except (IndexError, ValueError):
+                raise RuntimeError(f'upload {record["key"]}: malformed response status: {lines[0]!r}') from None
+            if status >= 400:
+                with open(body_path, 'rb') as sink:
+                    detail = sink.read()[:4096].decode(errors='replace')
+                raise RuntimeError(f'upload {record["key"]}: HTTP {status}: {detail}')
+            headers_map = {}
+            for line in lines[1:]:
+                if ':' in line:
+                    name, _, value = line.partition(':')
+                    headers_map[name.strip().lower()] = value.strip()
+            if headers_map.get('x-content-sha256') != record['sha256']:
+                raise RuntimeError('server did not confirm SHA256; deploy the new Worker first')
 
     def commit(self, state):
         data = {key: state[key] for key in ('release', 'previous')}
@@ -191,7 +288,18 @@ def resume(snapshot, remote):
         if record['key'] in state['uploaded']:
             continue
         print('upload and verify ' + record['key'], flush=True)
-        remote.upload(snapshot, record)
+        size = record['size']
+        def on_progress(sent, total, speed, done=False):
+            line = _progress_line(sent, total) + f' {_format_speed(speed)}'
+            if done:
+                print(line)
+            else:
+                print(line, end='\r', flush=True)
+        try:
+            remote.upload(snapshot, record, on_progress)
+        except RuntimeError:
+            print()  # newline so the next iteration's prompt isn't on the same line
+            raise
         state['uploaded'].append(record['key'])
         atomic_json(path, state)
     remote.commit(state)  # Idempotent even if the previous commit response was lost.
@@ -245,5 +353,7 @@ if __name__ == '__main__':
     try:
         main()
     except (RuntimeError, ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         print(f'x {error}\npublication not confirmed; retry or use --resume, --sync on conflict.', file=sys.stderr)
         sys.exit(1)

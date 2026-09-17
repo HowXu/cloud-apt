@@ -28,8 +28,8 @@ export const siteConfig: SiteConfig = {
         'sign your own GPG key, deploy your repository',
     ],
     usageSteps: [
-        { title: 'Add the repository',
-          code: 'deb https://apt-repo.howxu.cn kali-rolling main' },
+        { title: 'Add the repository and secret',
+            code: 'curl -fsSL https://apt-repo.howxu.cn/install.sh | sudo bash' },
         { title: 'Update package index',
           code: 'sudo apt update' },
         { title: 'Install a package',

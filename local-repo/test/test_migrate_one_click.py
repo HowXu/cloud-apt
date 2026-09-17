@@ -31,7 +31,7 @@ class FakeRemote:
     def current(self, suite):
         return {'etag': self.active, 'release': self.active}
 
-    def upload(self, root, record):
+    def upload(self, root, record, on_progress=None):
         self.calls.append(record['key'])
         path = root / record['local']
         if sha256(path) != record['sha256']:
