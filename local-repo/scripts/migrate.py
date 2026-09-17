@@ -213,7 +213,7 @@ def main():
     parser.add_argument('archive', nargs='?')
     parser.add_argument('target', nargs='?')
     args = parser.parse_args()
-    root = Path(os.environ.get('CLOUD_APT_ROOT', Path(__file__).resolve().parents[1])).resolve()
+    root = Path(os.environ.get('CLOUD_APT_ROOT', Path(__file__).resolve().parents[2])).resolve()
     if args.mode == 'export':
         archive = args.archive or str(root / ('cloud-apt-export-' + uuid.uuid4().hex + '.tar.gz'))
         export_repository(root, archive, os.environ.get('INCLUDE_DISTS') != '0')
