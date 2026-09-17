@@ -222,9 +222,14 @@ def post_import_sync(repo_root, password):
     script = repo_root / 'local-repo' / 'scripts' / 'build-and-push.sh'
     if not script.is_file():
         return  # partial repo (e.g. test fixture); user can run --sync manually
+    local_repo = repo_root / 'local-repo'
     try:
         proc = subprocess.Popen(
-            ['./local-repo/scripts/build-and-push.sh', '--sync', 'kali-rolling'],
+            ['bash', '-c',
+             '. "$1/scripts/lib-config.sh" && load_config && '
+             'export CLOUD_APT_ROOT="$2" WORKER_URL ADMIN_PUSH_TOKEN && '
+             'exec "$1/scripts/build-and-push.sh" --sync kali-rolling',
+             '_', str(local_repo), str(repo_root)],
             cwd=str(repo_root),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
