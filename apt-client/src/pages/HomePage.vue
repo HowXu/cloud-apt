@@ -15,7 +15,7 @@
       <span v-if="siteConfig.headerTagline" class="text-muted text-sm">{{ siteConfig.headerTagline }}</span>
     </header>
 
-    <SearchBox placeholder="搜索包名、描述、依赖…" />
+    <SearchBox placeholder="Search packages, descriptions, dependencies…" />
 
     <section class="mt-8">
       <h2 class="text-lg mb-4">Welcome</h2>

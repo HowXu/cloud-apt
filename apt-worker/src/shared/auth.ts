@@ -10,7 +10,7 @@ export function checkAuth(req: Request, env: Bindings): boolean {
 
     const presented = header.slice('Bearer '.length);
 
-    // 时序攻击
+    // timing-attack-safe compare
     if (presented.length !== token.length) return false;
     let mismatch = 0;
     for (let i = 0; i < token.length; i++) {

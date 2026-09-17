@@ -2,8 +2,9 @@ name = "cloud-apt"
 main = "src/index.ts"
 compatibility_date = "2026-05-29"
 
-# Cloudflare 在 wrangler deploy 时自动运行, 把 apt-client 构到 apt-worker/dist/
-# (Cloudflare Git 导入的 Build command 必须留空, 由本 [build] 接管)
+# Cloudflare runs this automatically on `wrangler deploy`; it builds
+# apt-client into apt-worker/dist/. The Build command field in the Cloudflare
+# Git import UI must be left empty so this [build] section takes over.
 [build]
 command = "npm --prefix ../apt-client install --no-audit --prefer-offline && npm --prefix ../apt-client run build -- --outDir ../apt-worker/dist --emptyOutDir"
 
@@ -22,7 +23,7 @@ invocation_logs = true
 enabled = false
 head_sampling_rate = 1
 
-# 用户填或注释掉让 Cloudflare Dashboard 自动创建
+# Fill these in or comment them out and let the Cloudflare Dashboard auto-create.
 [[kv_namespaces]]
 binding = "APT_KV"
 #id = "input your value and delete # or use cloudflare dashboard"
@@ -31,4 +32,9 @@ binding = "APT_KV"
 binding = "APT_BUCKET"
 #bucket_name = "input your value and delete # or use cloudflare dashboard"
 
-# Secrets: ADMIN_PUSH_TOKEN (用 wrangler secret put 设置)
+# Production does not use [vars] (secrets go through `wrangler secret put`).
+# Keeping the empty section here matches wrangler-dev.toml so both configs
+# parse the same way (no "missing section" surprise between dev and prod).
+[vars]
+
+# Secrets: ADMIN_PUSH_TOKEN (set via `wrangler secret put`)

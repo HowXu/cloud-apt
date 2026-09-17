@@ -45,9 +45,24 @@ After deployment, visit `https://<your-worker-domain>/`:
 
 ```
 cloud-apt
-├── apt-worker/          # Cloudflare Worker backend
+├── apt-worker/          # Cloudflare Worker backend (TypeScript)
 ├── apt-client/          # Vue 3 frontend (build output deployed to apt-worker/dist)
 ├── local-repo/          # Local repo template (deployed to ~/cloud-apt/)
+│   ├── scripts/         # Publish/migrate/init: thin bash wrappers + Python core
+│   │   ├── init.sh / push.sh / build-and-push.sh
+│   │   ├── migrate-export.sh / migrate-import.sh
+│   │   ├── push-key.sh / push-install.sh / gen-key.sh
+│   │   ├── publish.py    # core: snapshot, upload by-hash, signed commit
+│   │   ├── migrate.py    # core: export/import + GPG-encrypt config.env
+│   │   ├── repo_state.py # shared: GPG home, repo lock, SHA256
+│   │   └── lib-*.sh      # bash common (config + UI)
+│   ├── conf/            # reprepro distributions (created at runtime)
+│   ├── keys/            # GPG key pair (gitignored)
+│   └── ...              # db/ pool/ dists/ incoming/ created at runtime
+├── example/             # Sample .deb packages for end-to-end testing
+│   ├── build.sh         # Builds every example (cloud-apt-hello + cloud-apt-info)
+│   ├── cloud-apt-hello/ # C, libc6
+│   └── cloud-apt-info/  # Python, python3
 └── docs/                # spec + plan
 ```
 

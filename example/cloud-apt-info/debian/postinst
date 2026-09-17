@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+# /etc/cloud-apt may not exist on a fresh install; create the directory
+# before writing the config so the script's --config and --health flags
+# always have something to read.
+mkdir -p /etc/cloud-apt
+
+if [ ! -f /etc/cloud-apt/info.json ]; then
+    cat > /etc/cloud-apt/info.json <<'EOF'
+{"installed_by": "cloud-apt", "package": "cloud-apt-info"}
+EOF
+fi
+
+# Mirror cloud-apt-hello's layout: the canonical binary lives under
+# /usr/bin; the symlink in /usr/local/bin is what users actually run.
+ln -sf /usr/bin/cloud-apt-info /usr/local/bin/cloud-apt-info

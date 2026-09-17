@@ -1,0 +1,8 @@
+cloud-apt-info (0.1.0-1) unstable; urgency=low
+
+  * Initial release as a companion to cloud-apt-hello.
+  * Pure-Python CLI; depends on python3.
+  * Drops /etc/cloud-apt/info.json so postinst creates a directory.
+  * Exposes --version, --repo, --config, --health flags.
+
+ -- cloud-apt example <noreply@example.com>  Wed, 16 Sep 2026 20:30:00 +0800

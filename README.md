@@ -45,9 +45,24 @@
 
 ```
 cloud-apt
-├── apt-worker/          # Cloudflare Worker 后端
+├── apt-worker/          # Cloudflare Worker 后端 (TypeScript)
 ├── apt-client/          # Vue 3 前端 (构建产物部署到 apt-worker/dist)
 ├── local-repo/          # 本地仓库模板 (部署到 ~/cloud-apt/)
+│   ├── scripts/         # 发布/迁移/初始化 (薄 bash 壳 + Python 实现)
+│   │   ├── init.sh / push.sh / build-and-push.sh
+│   │   ├── migrate-export.sh / migrate-import.sh
+│   │   ├── push-key.sh / push-install.sh / gen-key.sh
+│   │   ├── publish.py    # 核心: 快照、上传 by-hash、签名提交
+│   │   ├── migrate.py    # 核心: 导出/导入 + GPG 加密 config.env
+│   │   ├── repo_state.py # 共享: GPG home、repo 锁、SHA256
+│   │   └── lib-*.sh      # bash 公共 (config + UI)
+│   ├── conf/            # reprepro distributions (运行后产生)
+│   ├── keys/            # GPG 密钥对 (gitignored)
+│   └── ...              # db/ pool/ dists/ incoming/ 运行时生成
+├── example/             # 端到端测试用 .deb 样例
+│   ├── build.sh         # 一键构建所有 (cloud-apt-hello + cloud-apt-info)
+│   ├── cloud-apt-hello/ # C, libc6
+│   └── cloud-apt-info/  # Python, python3
 └── docs/                # spec + plan
 ```
 

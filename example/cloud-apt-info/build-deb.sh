@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
+# Single-step local builder for cloud-apt-info (pure Python, no compile).
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PKG=cloud-apt-hello
-VERSION=0.2.1
+PKG=cloud-apt-info
+VERSION=0.1.0
 RELEASE=1
 ARCH=amd64
 PREFIX="/opt/${PKG}-${VERSION}"
-ARTIFACTS="$PWD/artifacts"
+ARTIFACTS="${EXAMPLE_ARTIFACTS:-$PWD/artifacts}"
 
 mkdir -p "$ARTIFACTS"
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 
-make clean
-make
-
+# Install the script under /opt so the .deb carries a /opt prefix similar to
+# cloud-apt-hello's layout; this also makes the staging tree non-trivial for
+# migrate-export to walk.
 make install "DESTDIR=$STAGE" "PREFIX=$PREFIX"
 
+# Debian package layout: /usr/bin (script), /etc/cloud-apt (config).
+mkdir -p "$STAGE/usr/bin"
+mkdir -p "$STAGE/etc/cloud-apt"
+install -m 755 "$STAGE$PREFIX/bin/cloud-apt-info.py" "$STAGE/usr/bin/cloud-apt-info"
 
 mkdir -p "$STAGE/DEBIAN"
 cp debian/control     "$STAGE/DEBIAN/control"

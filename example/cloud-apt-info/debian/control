@@ -1,0 +1,20 @@
+Package: cloud-apt-info
+Version: 0.1.0-1
+Architecture: amd64
+Maintainer: cloud-apt example <noreply@example.com>
+Section: utils
+Priority: optional
+Depends: python3
+Description: cloud-apt companion example (Python)
+ A pure-Python example package used to verify that cloud-apt
+ migration handles multiple packages without mixing their pool
+ paths. Distinct from cloud-apt-hello in three ways:
+ .
+   - Python source instead of C (no compile step)
+   - Depends on python3 instead of libc6
+   - Drops a config file under /etc/cloud-apt so postinst must
+     create a directory before writing the file
+ .
+ Exposes /usr/bin/cloud-apt-info and /usr/local/bin/cloud-apt-info
+ (via symlink created in postinst). Supports --version, --repo,
+ --config, and --health flags.

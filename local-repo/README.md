@@ -1,58 +1,90 @@
 # local-repo
 
-cloud-apt 的本地仓库工具。Fork 后只需两个公开命令即可使用:
+Local repository tooling for `cloud-apt`. After forking, two public
+commands cover everything:
 
 ```bash
-./local-repo/scripts/init.sh        # 首次: 写配置 + 准备 GPG + 推送公钥/客户端脚本
-./local-repo/scripts/push.sh pkg.deb # 日常: 签名 + 推送 .deb
+./local-repo/scripts/init.sh         # first run: write config, prep GPG, push pubkey + client scripts
+./local-repo/scripts/push.sh pkg.deb # daily use: sign + push a .deb
 ```
 
-## 工具要求
+## Tool requirements
 
 - reprepro (`apt install reprepro`)
 - GPG 2.x (`apt install gnupg2`)
 - curl (`apt install curl`)
-- Python 3.10+ (`apt install python3`，发布与迁移使用标准库，无 pip 依赖)
-- podman (可选, 容器化构建)
+- Python 3.10+ (`apt install python3`; the publisher and migrate use only the standard library, no pip dependencies)
+- podman (optional, for containerised builds)
 
-## 配置文件
+## Configuration
 
-`init.sh` 会把 Worker URL 与上传 Token 保存到 `local-repo/config.env` (权限 600)。
-GPG passphrase 不写入任何文件, 由 `push.sh` 临时提示输入。
+`init.sh` writes the Worker URL and upload token to
+`local-repo/config.env` (mode 600). The GPG passphrase is never written
+to disk — `push.sh` prompts for it on each invocation.
 
-CI 环境可直接放置 `local-repo/config.env`:
+CI environments can drop a `local-repo/config.env` directly:
 
 ```bash
 WORKER_URL="https://apt.example.com"
 ADMIN_PUSH_TOKEN="..."
 ```
 
-## 高级入口
+## Advanced entry points
 
-`build-and-push.sh --remove <pkg>` 与 `--sync` 仍保留, 适合高级维护。
-迁移用 `migrate-export.sh` / `migrate-import.sh`。
+`build-and-push.sh --remove <pkg>` and `--sync` are still available for
+advanced maintenance. For migration use `migrate-export.sh` /
+`migrate-import.sh`.
 
-## 发布、重试与版本一致性
+## Publishing, retry, and version consistency
 
-升级时先部署新版 Worker，再更新本地脚本。第一次用新版脚本发布前，Worker 继续读取原有 `dists/` 文件；首次成功发布后，浏览 API 和 APT 都读取已提交快照。此后不要再用旧版脚本覆盖 `dists/`，它不会切换当前快照。
+When upgrading, deploy the new Worker first, then update the local
+scripts. Until the first successful publish with the new scripts, the
+Worker continues to read the existing `dists/`; after that first
+commit, both the browse API and APT serve from the committed snapshot.
+After that, do **not** use an older script to overwrite `dists/` — it
+will not switch the current snapshot.
 
-发布器对整次收包、签名、上传加本地排他锁，将选定 suite 引用的 `.deb`、索引和签名复制到 `.publish/`。每个文件发送 SHA256，Worker 校验并确认后才记录完成。最后 `/api/publish/<suite>` 校验整个清单中的远端对象，再通过 R2 条件写入一次性切换当前版本；另一台维护机抢先发布时返回冲突，不覆盖对方的新版本。
+The publisher holds a local exclusive lock across the whole
+include/sign/upload cycle. It copies the suite's `.deb`, indexes, and
+signatures into `.publish/`, sends SHA256 for every file, and only
+records completion once the Worker confirms. The final
+`/api/publish/<suite>` validates every listed remote object and uses
+R2 conditional writes to switch the current version atomically. If
+another maintainer publishes first, the request returns a conflict and
+does not overwrite their new version.
 
 ```bash
-# 网络失败：重试原命令，或仅恢复已保存的同一批快照（无需原 deb）
+# Network failure: retry the original command, or resume the saved
+# snapshot without needing the original .deb
 ./local-repo/scripts/build-and-push.sh --resume kali-rolling
 
-# 远端被手动改动、发布冲突，或要将当前本地仓库作为完整目标重新同步
+# Remote was mutated out of band, publish conflict, or you want the
+# current local repo to fully resync as the authoritative target
 ./local-repo/scripts/build-and-push.sh --sync kali-rolling
 ```
 
-`--sync` 会创建新快照、重新上传校验全部引用文件，并以执行开始时的远端版本作为提交前提；它不会自动合并其他维护机的包。它也可以替代未完成的发布，未引用的本地旧暂存目录可在确认不再恢复后清理。
+`--sync` creates a new snapshot, re-uploads and verifies every
+referenced file, and uses the remote version that existed at sync
+start as the commit predecessor. It does not auto-merge other
+maintainers' packages. `--sync` can also replace an in-flight publish;
+unreferenced old staging directories can be cleaned up once you are
+sure you no longer want to resume them.
 
-Release 使用 SHA256 并声明 `Acquire-By-Hash: yes`。包文件、快照和旧 by-hash 索引在远端保持不可变，读取旧 InRelease 的客户端仍可取得对应旧索引和包；可变的规范索引 URL 不缓存。包内容变更必须使用新版本/文件名。下架仅从新索引中移除，旧文件暂不做自动回收，避免破坏进行中的下载。
+Releases use SHA256 and declare `Acquire-By-Hash: yes`. Package files,
+snapshots, and old by-hash indexes stay immutable on the remote, so a
+client that still holds the old `InRelease` can still fetch the
+matching old index and package; only the canonical index URLs are
+mutable and uncached. **Package content changes require a new
+version/filename.** Removal only drops the package from new indexes;
+old files are not auto-reclaimed, to avoid breaking in-flight
+downloads.
 
-要求客户端支持 InRelease 和 by-hash（现代 Debian/Ubuntu/Kali APT）。禁用 by-hash 或仅使用分离签名的旧客户端仍可能跨两个请求遇到发布切换，应重新执行 `apt update`。
+Clients need to support `InRelease` and by-hash (modern
+Debian/Ubuntu/Kali APT do). Clients that disable by-hash or use
+detached signatures only may catch a publish switch mid-update and
+should re-run `apt update`.
 
-## 迁移与恢复
+## Migration and recovery
 
 ```bash
 ./local-repo/scripts/migrate-export.sh /safe/path/repository.tar.gz
@@ -61,26 +93,48 @@ export CLOUD_APT_ROOT=/new/repository
 ./local-repo/scripts/build-and-push.sh --sync kali-rolling
 ```
 
-导出仅包括 `keys/conf/db/pool/dists` 状态，不包含 Token 配置、发布暂存或脚本。V2 备份记录每个文件的 SHA256，继续支持导入 V1；`INCLUDE_DISTS=0` 可省略索引，恢复后通过 `--sync` 重新生成。
+Export covers only `keys/`, `conf/`, `db/`, `pool/`, `dists/` — no
+token, no staging, no scripts. V2 backups record a SHA256 per file
+(V1 archives still import). `INCLUDE_DISTS=0` skips indexes; recover
+them later with `--sync`.
 
-导入先在目标目录旁完整解包，拒绝路径穿越、链接、特殊文件和重复条目；验证清单、密钥指纹、解密私钥、签名自检及 reprepro 数据库引用后，才替换状态子目录。备份放在目标目录内也可正常恢复。脚本、Dockerfile、本机配置和现有模板保留；旧状态及旧发布暂存保存到 `<target>.bak.<唯一标识>`。替换过程中发生可捕获错误会回滚，掉电或 SIGKILL 时应保留该备份人工恢复。
+Import extracts next to the target, refuses path traversal, links,
+special files, and duplicate entries; only after verifying the
+manifest, key fingerprint, decrypted private key, signature
+self-check, and reprepro database references does it replace the
+state subdirectories. Backups stored inside the target still work.
+Scripts, Dockerfile, host config, and existing templates are preserved;
+the old state and old publish staging are saved to
+`<target>.bak.<unique-suffix>`. Catchable errors during the swap roll
+back automatically; on power loss / SIGKILL, keep that backup and
+recover by hand.
 
-发布与迁移均使用临时隔离 GPG keyring，从加密备份恢复指定私钥，不依赖新机器的用户 keyring，不将私钥导入全局 keyring。密码通过 stdin 传给 GPG，退出时销毁临时 agent。恢复后需重新配置 Worker URL/Token。
+Both publisher and migration use a temporary isolated GPG keyring,
+restoring the requested private key from the encrypted backup. They
+do not depend on the new host's user keyring and never import private
+keys globally. Passphrases go to GPG via stdin, and the temporary
+agent is destroyed on exit. After recovery, reconfigure Worker URL
+and token.
 
-## 回归测试（Linux）
+## Regression tests (Linux)
 
 ```bash
 sudo apt-get install reprepro gnupg python3
 python3 -m unittest discover -s local-repo/test -v
 ```
 
-测试使用临时密钥、仓库和 APT 状态目录，覆盖断线恢复、提交响应丢失、并发锁、全量补传、升级/下架、迁移回滚，以及真实 APT 的签名验证与软件下载，不修改系统软件源或安装系统包。
+The tests use throwaway keys, repositories, and APT state. They cover
+network-failure resume, lost-commit-response recovery, repo locks,
+full re-upload, add/remove, migration rollback, plus real APT
+signature verification and package download — without modifying system
+sources or installing system packages.
 
-## 自定义 REPO_ROOT
+## Custom `REPO_ROOT`
 
 ```bash
 export CLOUD_APT_ROOT=/custom/path
 ./local-repo/scripts/init.sh
 ```
 
-不建议把状态放 `$HOME`, 因为 git 仓库里的状态 + 用户本地的密钥 应该物理隔离。
+Avoid putting state under `$HOME` — the repo's state and the local
+key material should be physically separated.

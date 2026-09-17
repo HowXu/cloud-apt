@@ -7,10 +7,10 @@
 static void usage(const char *prog) {
     fprintf(stderr,
         "Usage: %s [--version] [--repo] [--help]\n"
-        "  (无参数)    打印 Hello, cloud-apt!\n"
-        "  --version   输出版本号\n"
-        "  --repo      输出上游 apt 仓库地址\n"
-        "  --help      本帮助\n",
+        "  (no args)   prints Hello, cloud-apt!\n"
+        "  --version   prints the version\n"
+        "  --repo      prints the upstream apt repo URL\n"
+        "  --help      this help\n",
         prog);
 }
 

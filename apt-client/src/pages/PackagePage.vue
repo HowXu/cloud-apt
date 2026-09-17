@@ -72,7 +72,7 @@ const route = useRoute();
 const pkg = computed(() => decodeURIComponent((route.params.pkg as string) || ''));
 
 const suite = computed(() => siteConfig.defaultSuite);
-const arch = computed(() => 'amd64');  // 简化: 只查 amd64, 显示所有 arch
+const arch = computed(() => 'amd64');  // simplification: only query amd64, render all archs
 
 const { packages, loading, error } = usePackages(suite, arch);
 

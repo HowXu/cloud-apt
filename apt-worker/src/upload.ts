@@ -36,8 +36,9 @@ export async function handleUpload(req: Request, env: Bindings): Promise<Respons
         } else if (validated.key.startsWith('dists/')) {
             allowed = ['text/plain', 'application/x-gzip', 'application/gzip', 'application/x-xz', 'application/octet-stream'];
         } else if (ALLOWED_EXACT.includes(validated.key)) {
-            // scripts/install.sh / pubkey.asc — proxy 在 GET 端已 pin Content-Type,
-            // 这里只允许 text/plain 系 + binary 供某些自动化工具用 octet-stream 上传
+            // scripts/install.sh / pubkey.asc — proxy pins Content-Type on GET,
+            // so here we only accept text/plain-family + binary octet-stream
+            // for tools that upload raw bytes.
             allowed = ['text/plain', 'text/plain; charset=utf-8', 'application/octet-stream'];
         } else {
             return new Response('Invalid upload path', { status: 400 });

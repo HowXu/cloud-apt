@@ -23,7 +23,7 @@ invocation_logs = true
 enabled = false
 head_sampling_rate = 1
 
-# 本地开发用 Cloudflare 提供的 miniflare 模拟 KV + R2
+# Local development uses Cloudflare's miniflare to mock KV + R2.
 [[kv_namespaces]]
 binding = "APT_KV"
 id = "local-dev-kv"
@@ -32,5 +32,5 @@ id = "local-dev-kv"
 binding = "APT_BUCKET"
 bucket_name = "local-dev-bucket"
 
-# ADMIN_PUSH_TOKEN 已移至 .dev.vars (本地 secrets, 不入仓)
+# ADMIN_PUSH_TOKEN moved to .dev.vars (local secrets, gitignored).
 [vars]

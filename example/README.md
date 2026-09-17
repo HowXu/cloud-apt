@@ -1,59 +1,45 @@
-# example/cloud-apt-hello
+# example/
 
-A 5-line C program packaged as a `.deb`, used to exercise the
-`cloud-apt` repository end-to-end.
-
-```
-$ /usr/local/bin/cloud-apt-hello
-Hello, cloud-apt!
-```
+Sample packages for end-to-end testing of `cloud-apt`. Each example is a
+self-contained source tree whose name matches the Debian package it
+produces (1:1). Build everything from this directory and the resulting
+`.deb` files all land in `artifacts/` here, so a single `ls` shows the
+full build output.
 
 ## Layout
 
-| Path inside the package | Purpose |
-|---|---|
-| `/opt/cloud-apt-hello-0.2.0/bin/cloud-apt-hello` | The compiled binary |
-| `/usr/local/bin/cloud-apt-hello` | Symlink (created by `postinst`) |
-| `/usr/share/doc/cloud-apt-hello/copyright` | Apache-2.0 license |
-| `/usr/share/doc/cloud-apt-hello/changelog.gz` | Compressed changelog |
+```
+example/
+├── build.sh               # Builds every example; writes to ./artifacts/
+├── README.md              # this file
+├── artifacts/             # All .deb outputs land here (gitignored)
+├── cloud-apt-hello/       # cloud-apt-hello_*.deb (C, libc6)
+│   ├── cloud-apt-hello.c
+│   ├── Makefile, build-deb.sh, README.md
+│   └── debian/            # control, copyright, changelog, postinst, prerm
+└── cloud-apt-info/        # cloud-apt-info_*.deb (Python, python3)
+    ├── cloud-apt-info.py
+    ├── Makefile, build-deb.sh, README.md
+    └── debian/            # control, copyright, changelog, postinst, prerm
+```
 
-## Build the .deb (local, no container)
-
-Requires `gcc` (or `cc`) and `dpkg-deb` on the host.
+## Build
 
 ```bash
 cd example
-bash build-deb.sh
-# → artifacts/cloud-apt-hello_0.2.0-1_amd64.deb
+./build.sh                                       # build both, outputs to artifacts/
+./build.sh cloud-apt-hello                       # only hello
+./build.sh cloud-apt-info cloud-apt-hello        # explicit order
 ```
 
-## Build the .deb (containerized via `act` + podman)
-
-For a production upstream project the upstream-deb-packager pipeline
-applies: containerised build on `kalilinux/kali-rolling:latest`,
-isolated toolchain, GitHub Actions workflow at
-`.github/workflows/build-kali.yml`. Skipped here — overkill for a
-hello-world.
-
-## Install / remove
+Each example's `build-deb.sh` can also be run on its own (defaults to
+writing to `./artifacts/` relative to the example dir):
 
 ```bash
-sudo apt install ./artifacts/cloud-apt-hello_0.2.0-1_amd64.deb
-cloud-apt-hello
-# → Hello, cloud-apt!
-sudo apt remove cloud-apt-hello
+cd cloud-apt-hello && bash build-deb.sh
 ```
 
-## Files
-
-| File | Purpose |
-|---|---|
-| `cloud-apt-hello.c` | The C source (5 lines, `printf`) |
-| `Makefile` | `make` / `make install DESTDIR=…` |
-| `debian/control` | Package metadata (name, version, depends) |
-| `debian/postinst` | Creates `/usr/local/bin/cloud-apt-hello` symlink |
-| `debian/prerm` | Removes the symlink on `apt remove` |
-| `debian/changelog` | `cloud-apt-hello (0.2.0-1)` entry |
-| `debian/copyright` | Apache-2.0 license |
-| `build-deb.sh` | Single-step local builder |
-| `artifacts/` | `.deb` output (gitignored) |
+The two examples are intentionally different — see
+`cloud-apt-info/README.md` for the side-by-side comparison. Together
+they exercise the repo with multiple packages and a mix of build
+systems, useful for verifying `migrate-export` / `migrate-import`.
