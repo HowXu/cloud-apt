@@ -54,25 +54,47 @@ def export_repository(root, archive, include_dists=True):
             email = next((line.split('=', 1)[1] for line in keyid_txt.splitlines()
                           if line.startswith('EMAIL=')), None)
             if email:
+                fingerprint = key_fingerprint(root)
                 config_env_gpg = root / 'config.env.gpg'
-                try:
-                    with tempfile.TemporaryDirectory(prefix='cloud-apt-export-gpg-') as keyring_home:
-                        keyring_home_path = Path(keyring_home)
-                        keyring_home_path.chmod(0o700)
+                with tempfile.TemporaryDirectory(prefix='cloud-apt-export-gpg-') as keyring_home:
+                    keyring_home_path = Path(keyring_home)
+                    keyring_home_path.chmod(0o700)
+                    try:
                         subprocess.run([
                             'gpg', '--homedir', str(keyring_home_path), '--batch', '--yes',
                             '--import', str(root / 'keys' / 'public.key'),
                         ], check=True, capture_output=True)
-                        subprocess.run([
+                        # Check whether any key in this keyring has encryption capability
+                        cap_listing = subprocess.run([
                             'gpg', '--homedir', str(keyring_home_path), '--batch', '--yes',
-                            '--trust-model', 'always',
-                            '--output', str(config_env_gpg),
-                            '--encrypt', '--recipient', email,
-                            str(config_env),
-                        ], check=True, capture_output=True)
-                    entries.append(config_env_gpg)
-                except (subprocess.CalledProcessError, FileNotFoundError, OSError):
-                    config_env_gpg = None
+                            '--with-colons', '--list-keys', '--with-keygrip',
+                        ], capture_output=True).stdout.decode()
+                        has_encr = any(
+                            line.startswith('sub:') and 'e' in (line.split(':')[11] or '')
+                            for line in cap_listing.splitlines()
+                        )
+                        if not has_encr:
+                            print(
+                                f'warning: keys/public.key has no encryption-capable subkey; '
+                                f'config.env will not be in the archive. '
+                                f'To fix on this machine:\n'
+                                f'  gpg --homedir <homedir> --batch --yes --pinentry-mode loopback '
+                                f'--passphrase-fd 0 --quick-add-key {fingerprint} cv25519 encr 0 '
+                                f'<<<$GPG_PASSPHRASE\n'
+                                f'Then re-export.',
+                                file=sys.stderr)
+                            config_env_gpg = None
+                        else:
+                            subprocess.run([
+                                'gpg', '--homedir', str(keyring_home_path), '--batch', '--yes',
+                                '--trust-model', 'always',
+                                '--output', str(config_env_gpg),
+                                '--encrypt', '--recipient', email,
+                                str(config_env),
+                            ], check=True, capture_output=True)
+                            entries.append(config_env_gpg)
+                    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+                        config_env_gpg = None
         manifest = {'magic': MAGIC, 'version': 2, 'gpg_fpr': fingerprint, 'include_dists': include_dists,
                     'has_config': config_env_gpg is not None,
                     'files': {p.relative_to(root).as_posix(): {'sha256': sha256(p), 'size': p.stat().st_size}
