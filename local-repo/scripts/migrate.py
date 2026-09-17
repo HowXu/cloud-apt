@@ -162,9 +162,23 @@ def replace_state(target, stage, replace=os.replace):
             if name != '.publish':
                 replace(stage / name, current)
                 installed.append(name)
+        # config.env decrypts into stage/; install it into local-repo/ alongside
+        # the scripts that read it. Roll back via the same installed list.
+        config_env_dst = local_repo / 'config.env'
+        config_env_src = stage / 'config.env'
+        if config_env_src.is_file():
+            config_env_dst.parent.mkdir(parents=True, exist_ok=True)
+            if config_env_dst.exists():
+                replace(config_env_dst, backup / 'config.env')
+                saved.append('config.env')
+            replace(config_env_src, config_env_dst)
+            installed.append('config.env')
     except BaseException:
         for name in reversed(installed):
-            os.replace(target / name, stage / name)
+            if name == 'config.env':
+                os.replace(target / name, stage / name)
+            else:
+                os.replace(target / name, stage / name)
         for name in reversed(saved):
             os.replace(backup / name, target / name)
         raise
@@ -173,6 +187,7 @@ def replace_state(target, stage, replace=os.replace):
 
 def import_repository(archive, target, password, confirm=False):
     archive, target = Path(archive).resolve(), Path(target).resolve()
+    local_repo = target / 'local-repo'
     if not archive.is_file():
         raise RuntimeError(f'archive not found: {archive}')
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -194,11 +209,11 @@ def import_repository(archive, target, password, confirm=False):
                 if config_env_gpg.is_file():
                     decrypted = subprocess.run([
                             'gpg', '--homedir', str(home), '--batch', '--yes',
-                            '--output', str(target / 'config.env'),
+                            '--output', str(stage / 'config.env'),
                             '--decrypt', str(config_env_gpg),
                         ], capture_output=True)
                     if decrypted.returncode == 0:
-                        (target / 'config.env').chmod(0o600)
+                        (stage / 'config.env').chmod(0o600)
                     else:
                         print(f'warning: config.env.gpg decrypt failed ({decrypted.stderr.decode(errors="replace")[:200]}); set ADMIN_PUSH_TOKEN manually', file=sys.stderr)
             backup = replace_state(target, stage)
