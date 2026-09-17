@@ -177,13 +177,13 @@ def replace_state(target, stage, replace=os.replace):
     backup.mkdir(mode=0o700)
     saved, installed = [], []
     try:
-        # Retain the installed source template, even when importing an older backup.
-        template = target / 'conf/distributions.template'
+        # Retain the installed source template, even when importing an older archive.
+        template = local_repo / 'conf/distributions.template'
         if template.is_file():
             shutil.copyfile(template, stage / 'conf/distributions.template')
         # Local pending uploads belong to the old DB and must not survive a migration.
         for name in (*STATE_DIRS, '.publish'):
-            current = target / name
+            current = local_repo / name
             if current.exists():
                 replace(current, backup / name)
                 saved.append(name)
@@ -202,13 +202,10 @@ def replace_state(target, stage, replace=os.replace):
             replace(config_env_src, config_env_dst)
             installed.append('config.env')
     except BaseException:
-        # config.env lives under local_repo, not directly under target.
         for name in reversed(installed):
-            location = local_repo if name == 'config.env' else target
-            os.replace(location / name, stage / name)
+            os.replace(local_repo / name, stage / name)
         for name in reversed(saved):
-            location = local_repo if name == 'config.env' else target
-            os.replace(backup / name, location / name)
+            os.replace(backup / name, local_repo / name)
         raise
     return backup
 

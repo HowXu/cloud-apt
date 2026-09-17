@@ -152,9 +152,10 @@ class OneClickTests(unittest.TestCase):
         self.assertIn('WORKER_URL=', content)
         self.assertIn('ADMIN_PUSH_TOKEN=', content)
         self.assertIn('secret-token-abc', content)
-        # State dirs land at repo root, not inside local-repo/
+        # State dirs land under local-repo/, matching the source layout.
         for name in ('keys', 'conf', 'db', 'pool'):
-            self.assertTrue((dst / name).is_dir(), f'{name} missing at repo root')
+            self.assertTrue((dst / 'local-repo' / name).is_dir(),
+                            f'{name} missing under local-repo/')
         sync.assert_called_once()
 
     def test_post_import_sync_called_when_dists_populated(self):
