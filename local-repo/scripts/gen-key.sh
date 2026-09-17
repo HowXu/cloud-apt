@@ -112,6 +112,13 @@ if [[ -z "$FPR" ]]; then
     exit 1
 fi
 
+# Add an encryption subkey so config.env can be encrypted to this key in
+# future archive exports. The primary remains sign-only (reprepro only
+# needs to sign). Passphrase via fd 3 to keep it out of argv / disk.
+gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
+    --quick-add-key "$FPR" cv25519 encr 0 \
+    3<<<"$GPG_PASSPHRASE"
+
 # M-13: atomic write of public.key (tmp + mv, same fs guarantees atomicity).
 tmp=$(mktemp "$KEY_DIR/.tmp.XXXX")
 TMP_FILES+=("$tmp")
