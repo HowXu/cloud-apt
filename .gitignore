@@ -23,6 +23,7 @@ local-repo/dists/
 local-repo/incoming/
 local-repo/.publish/
 local-repo/.repository.lock
+local-repo/config.env
 local-repo/cloud-apt-export-*.tar.gz
 local-repo.bak.*/
 __pycache__/
