@@ -277,9 +277,9 @@ def import_repository(archive, target, password, confirm=False):
                     else:
                         print(f'warning: config.env.gpg decrypt failed ({decrypted.stderr.decode(errors="replace")[:200]}); set ADMIN_PUSH_TOKEN manually', file=sys.stderr)
             backup = replace_state(target, stage)
-            dists = target / 'dists'
-            if dists.exists() and any(dists.iterdir()):
-                post_import_sync(target, password)
+        needs_sync = (target / 'dists').exists() and any((target / 'dists').iterdir())
+    if needs_sync:
+        post_import_sync(target, password)
     print(f'import complete with signature self-check: {target}\nold state backup: {backup}')
     print(f'for subsequent publishing set CLOUD_APT_ROOT={target}; the publisher restores an isolated signing environment from keys/')
     return backup
