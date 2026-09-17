@@ -18,21 +18,21 @@ export interface SiteConfig {
 }
 
 export const siteConfig: SiteConfig = {
-    headerTitle: 'Cloud APT',
+    headerTitle: 'Cloud APT Repository',
     headerTagline: '',
-    browserTabTitle: 'Cloud APT',
-    iconUrl: '',
+    browserTabTitle: 'Cloud APT Repository',
+    iconUrl: 'https://q1.qlogo.cn/g?b=qq&nk=672252397&s=640',
     iconAlt: '',
     homepageIntroLines: [
-        'Cloudflare Workers + R2 powered apt repository.',
-        'Sign your own GPG key, deploy in 5 minutes.',
+        'Cloudflare drived apt repository.',
+        'sign your own GPG key, deploy your repository',
     ],
     usageSteps: [
-        { title: '1. Add the repository',
-          code: 'deb https://<your-worker-domain> kali-rolling main' },
-        { title: '2. Update package index',
+        { title: 'Add the repository',
+          code: 'deb https://apt-repo.howxu.cn kali-rolling main' },
+        { title: 'Update package index',
           code: 'sudo apt update' },
-        { title: '3. Install a package',
+        { title: 'Install a package',
           code: 'sudo apt install <package-name>' },
     ],
     showGithubButton: true,
