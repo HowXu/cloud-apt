@@ -173,9 +173,6 @@ class OneClickTests(unittest.TestCase):
         (dst / 'dists').mkdir()
         (dst / 'dists/.placeholder').write_text('existing')
 
-        with mock.patch('migrate.post_import_sync', wraps=__import__('migrate').post_import_sync) as _:
-            pass  # noqa
-
         called = []
 
         def fake_sync(repo_root, password):

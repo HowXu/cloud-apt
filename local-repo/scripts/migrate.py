@@ -243,7 +243,6 @@ def post_import_sync(repo_root, password):
 
 def import_repository(archive, target, password, confirm=False):
     archive, target = Path(archive).resolve(), Path(target).resolve()
-    local_repo = target / 'local-repo'
     if not archive.is_file():
         raise RuntimeError(f'archive not found: {archive}')
     target.parent.mkdir(parents=True, exist_ok=True)
