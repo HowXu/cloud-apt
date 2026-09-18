@@ -159,11 +159,14 @@ class Remote:
                     except (BrokenPipeError, ValueError, OSError):
                         pass
             try:
-                returncode = proc.wait(timeout=30)
+                # Match curl's --max-time (600s for upload + a generous slack for
+                # the response headers/body write). Without this Python would kill
+                # curl long before the worker finishes receiving a slow link.
+                returncode = proc.wait(timeout=620)
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
-                raise RuntimeError(f'upload {record["key"]} timed out after 30s')
+                raise RuntimeError(f'upload {record["key"]} timed out before curl could finish')
             stderr_data = proc.stderr.read() if proc.stderr else b''
             elapsed = time.monotonic() - start
             if on_progress:
