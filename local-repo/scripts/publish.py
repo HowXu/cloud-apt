@@ -34,30 +34,6 @@ except (AttributeError, ValueError, OSError):
     pass
 
 
-def _format_size(n):
-    if n >= 1024 * 1024:
-        return f'{n / 1024 / 1024:.1f} MB'
-    if n >= 1024:
-        return f'{n / 1024:.0f} KB'
-    return f'{n} B'
-
-
-def _format_speed(bps):
-    if bps >= 1024 * 1024:
-        return f'{bps / 1024 / 1024:.1f} MB/s'
-    if bps >= 1024:
-        return f'{bps / 1024:.0f} KB/s'
-    return f'{bps:.0f} B/s'
-
-
-def _progress_line(sent, total):
-    pct = sent / total if total else 1
-    bar_width = 30
-    filled = min(bar_width, int(pct * bar_width))
-    bar = '=' * max(0, filled - 1) + ('>' if filled < bar_width else '=')
-    return f'  {_format_size(sent)} / {_format_size(total)} [{bar.ljust(bar_width)}] {pct * 100:3.0f}%'
-
-
 class Remote:
     def __init__(self, url, token):
         parsed = urllib.parse.urlsplit(url)
@@ -101,6 +77,20 @@ class Remote:
             raise RuntimeError(f'{method} {path}: HTTP {status}: {detail}') from None
         return body, headers_map
 
+    def presign(self, key, size, sha256, content_type):
+        path = '/api/upload/' + urllib.parse.quote(key, safe='/') + '/presign'
+        body, _ = self.request('POST', path,
+            json.dumps({'size': size, 'sha256': sha256, 'content_type': content_type}).encode(),
+            {'Content-Type': 'application/json'})
+        return json.loads(body)
+
+    def finalize(self, key, size, sha256):
+        path = '/api/upload/' + urllib.parse.quote(key, safe='/') + '/finalize'
+        body, _ = self.request('POST', path,
+            json.dumps({'size': size, 'sha256': sha256}).encode(),
+            {'Content-Type': 'application/json'})
+        return None
+
     def current(self, suite):
         body, _ = self.request('GET', f'/api/publish/{suite}')
         data = json.loads(body)
@@ -108,91 +98,59 @@ class Remote:
             data['packages'] = []
         return data
 
-    def upload(self, snapshot, record, on_progress=None):
+    def upload(self, snapshot, record):
         path = snapshot / record['local']
         if path.stat().st_size != record['size'] or sha256(path) != record['sha256']:
             raise RuntimeError(f'pending publication snapshot modified: {path}')
-        size = record['size']
-        with tempfile.TemporaryDirectory(prefix='cloud-apt-remote-') as directory:
-            body_path, header_path = (os.path.join(directory, name)
-                                      for name in ('body', 'headers'))
-            cmd = ['curl', '-sS', '--max-time', '600', '-X', 'PUT',
-                   '-D', header_path, '-o', body_path,
-                   '-H', f'Content-Type: {record["content_type"]}',
-                   '-H', f'Content-Length: {size}',
-                   '-H', f'X-Content-SHA256: {record["sha256"]}',
-                   '-H', f'Authorization: Bearer {self.token}',
-                   '--data-binary', '@-',
-                   self.url + '/api/upload/' + urllib.parse.quote(record['key'], safe='/')]
-            start = time.monotonic()
-            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            chunk_size = 64 * 1024
-            sent = 0
-            last_update = start
-            write_error = None
-            try:
-                with path.open('rb') as body:
-                    while True:
-                        chunk = body.read(chunk_size)
-                        if not chunk:
-                            break
-                        try:
-                            proc.stdin.write(chunk)
-                        except (BrokenPipeError, ValueError, OSError) as error:
-                            write_error = error
-                            break
-                        sent += len(chunk)
-                        # Throttle to ~10 updates/sec, but always emit on a >0.5%
-                        # jump so small files still show movement.
-                        now = time.monotonic()
-                        if on_progress and (now - last_update >= 0.1
-                                            or sent == size
-                                            or sent * 200 // max(size, 1) != (sent - len(chunk)) * 200 // max(size, 1)):
-                            speed = sent / (now - start) if now > start else 0
-                            on_progress(sent, size, speed)
-                            last_update = now
-            finally:
-                if proc.stdin and not proc.stdin.closed:
-                    try:
-                        proc.stdin.close()
-                    except (BrokenPipeError, ValueError, OSError):
-                        pass
-            try:
-                # Match curl's --max-time (600s for upload + a generous slack for
-                # the response headers/body write). Without this Python would kill
-                # curl long before the worker finishes receiving a slow link.
-                returncode = proc.wait(timeout=620)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-                raise RuntimeError(f'upload {record["key"]} timed out before curl could finish')
-            stderr_data = proc.stderr.read() if proc.stderr else b''
-            elapsed = time.monotonic() - start
-            if on_progress:
-                speed = sent / elapsed if elapsed > 0 else 0
-                on_progress(sent, size, speed, done=True)
-            if write_error or returncode != 0:
-                detail = stderr_data.decode(errors='replace')[:500]
-                cause = f' ({write_error})' if write_error else ''
-                raise RuntimeError(f'upload {record["key"]} failed (curl exit {returncode}){cause}: {detail}')
-            with open(header_path) as sink:
-                lines = sink.read().splitlines()
-            try:
-                status = int(lines[0].split()[1])
-            except (IndexError, ValueError):
-                raise RuntimeError(f'upload {record["key"]}: malformed response status: {lines[0]!r}') from None
-            if status >= 400:
-                with open(body_path, 'rb') as sink:
-                    detail = sink.read()[:4096].decode(errors='replace')
-                raise RuntimeError(f'upload {record["key"]}: HTTP {status}: {detail}')
-            headers_map = {}
-            for line in lines[1:]:
-                if ':' in line:
-                    name, _, value = line.partition(':')
-                    headers_map[name.strip().lower()] = value.strip()
-            if headers_map.get('x-content-sha256') != record['sha256']:
-                raise RuntimeError('server did not confirm SHA256; deploy the new Worker first')
+        if record['size'] > 5 * 1024 * 1024 * 1024:
+            raise RuntimeError(
+                f'upload {record["key"]}: size {record["size"]} exceeds R2 single-PUT 5 GB limit; '
+                'use a future multipart client')
+
+        content_type = record['content_type']
+        presigned = self.presign(record['key'], record['size'], record['sha256'], content_type)
+        signed_url = presigned['url']
+        signed_headers = {k: v for k, v in presigned['headers'].items()}
+
+        cmd = ['curl', '-sS', '--max-time', '3600', '-X', 'PUT',
+               '-H', f'Content-Type: {content_type}',
+               '--progress-bar',
+               '--data-binary', '@-']
+        for k, v in signed_headers.items():
+            if k.lower() == 'content-type':
+                continue  # already set explicitly above
+            cmd += ['-H', f'{k}: {v}']
+        cmd.append(signed_url)
+
+        start = time.monotonic()
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                stdout=subprocess.PIPE, stderr=None)
+        write_error = None
+        try:
+            with path.open('rb') as body:
+                shutil.copyfileobj(body, proc.stdin, length=64 * 1024)
+        except (BrokenPipeError, ValueError, OSError) as error:
+            write_error = error
+        finally:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.close()
+                except (BrokenPipeError, ValueError, OSError):
+                    pass
+        try:
+            returncode = proc.wait(timeout=3610)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise RuntimeError(f'upload {record["key"]} timed out before curl could finish')
+        elapsed = time.monotonic() - start
+        speed = record['size'] / elapsed if elapsed > 0 else 0
+        if write_error or returncode != 0:
+            raise RuntimeError(
+                f'upload {record["key"]} failed (curl exit {returncode})'
+                + (f' ({write_error})' if write_error else ''))
+        print(f'  {record["key"]}: {speed / 1024 / 1024:.1f} MB/s', flush=True)
+        self.finalize(record['key'], record['size'], record['sha256'])
 
     def commit(self, suite, release, previous, files, packages):
         data = {
@@ -579,16 +537,9 @@ def resume(snapshot, remote):
         if record['key'] in state['uploaded']:
             continue
         print('upload and verify ' + record['key'], flush=True)
-        def on_progress(sent, total, speed, done=False, key=record['key']):
-            line = _progress_line(sent, total) + f' {_format_speed(speed)}'
-            if done:
-                print(f'  {key}: {line}')
-            else:
-                print(line, end='\r', flush=True)
         try:
-            remote.upload(snapshot, record, on_progress)
+            remote.upload(snapshot, record)
         except RuntimeError:
-            print()
             raise
         state['uploaded'].append(record['key'])
         atomic_json(snapshot / 'state.json', state)
@@ -651,7 +602,9 @@ if __name__ == '__main__':
     try:
         main()
     except (RuntimeError, ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
+        print(f'x {error}\npublication not confirmed; retry or use --resume, --sync on conflict.', file=sys.stderr)
+        sys.exit(1)
+    except Exception:
         import traceback
         traceback.print_exc(file=sys.stderr)
-        print(f'x {error}\npublication not confirmed; retry or use --resume, --sync on conflict.', file=sys.stderr)
         sys.exit(1)
