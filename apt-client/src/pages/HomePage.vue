@@ -30,7 +30,7 @@
         :to="`/browse?suite=${siteConfig.defaultSuite}&arch=amd64`"
         class="inline-block px-4 py-2 bg-card border border-border rounded-md text-accent no-underline hover:bg-hover"
       >
-        Browse {{ siteConfig.defaultSuite }} (amd64)
+        {{ siteConfig.defaultSuite }} (amd64)
       </router-link>
     </section>
 
