@@ -3,6 +3,8 @@ import { checkAuth } from './shared/auth';
 import { validateUploadPath, ALLOWED_EXACT } from './shared/path';
 import { digest, isImmutable } from './releases';
 
+const SHA256_RE = /^[a-fA-F0-9]{64}$/;
+
 export async function handleUpload(req: Request, env: Bindings): Promise<Response> {
     if (req.method !== 'PUT' && req.method !== 'DELETE') {
         return new Response('Method Not Allowed', { status: 405 });
@@ -82,4 +84,61 @@ export async function handleUpload(req: Request, env: Bindings): Promise<Respons
     }
 
     return new Response('OK', { status: 200 });
+}
+
+export async function handleFinalize(req: Request, env: Bindings): Promise<Response> {
+    if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+    if (!checkAuth(req, env)) return new Response('unauthorized', { status: 401 });
+
+    const url = new URL(req.url);
+    let rawPath: string;
+    try {
+        rawPath = decodeURIComponent(url.pathname.replace(/^\/api\/upload\//, '').replace(/\/finalize$/, ''));
+    } catch {
+        return new Response('Invalid path encoding', { status: 400 });
+    }
+    const validated = validateUploadPath(rawPath);
+    if (!validated.ok) return new Response(`Bad Request: ${validated.error}`, { status: 400 });
+
+    const bucket = env.APT_BUCKET;
+    if (!bucket) return new Response('R2 not bound', { status: 500 });
+
+    let body: { size: number; sha256: string };
+    try {
+        const text = await req.text();
+        if (text.length > 64 * 1024) return new Response('Finalize body too large', { status: 413 });
+        body = JSON.parse(text);
+    } catch {
+        return new Response('Invalid JSON body', { status: 400 });
+    }
+    if (!body || typeof body.size !== 'number' || !Number.isSafeInteger(body.size) || body.size <= 0) {
+        return new Response('Invalid size', { status: 400 });
+    }
+    if (typeof body.sha256 !== 'string' || !SHA256_RE.test(body.sha256)) {
+        return new Response('Invalid sha256', { status: 400 });
+    }
+    const expectedSha = body.sha256.toLowerCase();
+
+    const head = await bucket.head(validated.key);
+    if (!head) return new Response('Object not found in R2', { status: 404 });
+    if (head.size !== body.size) {
+        return new Response(`Size mismatch: R2=${head.size} claim=${body.size}`, { status: 400 });
+    }
+    const storedSha = head.customMetadata?.sha256?.toLowerCase();
+    if (storedSha !== expectedSha) {
+        return new Response(`sha256 mismatch: R2=${storedSha} claim=${expectedSha}`, { status: 400 });
+    }
+
+    if (isImmutable(validated.key)) {
+        // Re-head to detect concurrent write races: a different etag with the
+        // same metadata is the existing immutable object beating us to it.
+        const recheck = await bucket.head(validated.key);
+        if (recheck && recheck.etag !== head.etag && recheck.customMetadata?.sha256?.toLowerCase() === expectedSha) {
+            // Concurrent writer with identical hash: idempotent OK.
+        } else if (recheck && recheck.etag !== head.etag) {
+            await bucket.delete(validated.key);
+            return new Response('Immutable file differs; use a new package version', { status: 409 });
+        }
+    }
+    return new Response('OK', { headers: { 'X-Content-SHA256': expectedSha } });
 }

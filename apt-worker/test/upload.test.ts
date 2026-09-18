@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleUpload } from '../src/upload';
+import { handleUpload, handleFinalize } from '../src/upload';
 
 const mockR2 = () => ({
     put: vi.fn(async () => ({})),
@@ -107,6 +107,130 @@ describe('handleUpload', () => {
             body: 'deb-data',
         });
         const r = await handleUpload(req, e);
+        expect(r.status).toBe(200);
+    });
+});
+
+const finalizeMockR2 = (overrides: Partial<{ put: any; head: any; delete: any }> = {}) => ({
+    put: overrides.put ?? vi.fn(async () => ({})),
+    head: overrides.head ?? vi.fn(async () => null),
+    delete: overrides.delete ?? vi.fn(async () => ({})),
+});
+
+describe('handleFinalize', () => {
+    const sha = 'a'.repeat(64);
+    const envFor = (bucket: any) => ({
+        APT_BUCKET: bucket, ADMIN_PUSH_TOKEN: 'secret',
+    });
+
+    it('401 without Bearer', async () => {
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/finalize', {
+            method: 'POST', body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(finalizeMockR2()));
+        expect(r.status).toBe(401);
+    });
+
+    it('400 for unsafe path', async () => {
+        const req = new Request('https://x/api/upload/../etc/passwd/finalize', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(finalizeMockR2()));
+        expect(r.status).toBe(400);
+    });
+
+    it('404 when R2 object is missing', async () => {
+        const bucket = finalizeMockR2({ head: vi.fn(async () => null) });
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/finalize', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(bucket));
+        expect(r.status).toBe(404);
+    });
+
+    it('400 when R2 size differs from claimed size', async () => {
+        const bucket = finalizeMockR2({
+            head: vi.fn(async () => ({
+                size: 200,
+                customMetadata: { sha256: sha },
+                etag: 'e',
+            } as any)),
+        });
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/finalize', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(bucket));
+        expect(r.status).toBe(400);
+    });
+
+    it('400 when R2 sha256 metadata differs', async () => {
+        const bucket = finalizeMockR2({
+            head: vi.fn(async () => ({
+                size: 100, etag: 'e',
+                customMetadata: { sha256: 'b'.repeat(64) },
+            } as any)),
+        });
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/finalize', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(bucket));
+        expect(r.status).toBe(400);
+    });
+
+    it('409 when immutable and pre-existing object has a different hash (deletes new copy)', async () => {
+        const headFn = vi.fn(async () => ({
+            size: 100, etag: 'e', customMetadata: { sha256: sha },
+        } as any))
+            .mockResolvedValueOnce({ size: 100, etag: 'e', customMetadata: { sha256: sha } } as any)
+            .mockResolvedValueOnce({ size: 100, etag: 'old', customMetadata: { sha256: 'c'.repeat(64) } } as any);
+        const deleteFn = vi.fn(async () => ({}));
+        const bucket = finalizeMockR2({ head: headFn, delete: deleteFn });
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/finalize', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(bucket));
+        expect(r.status).toBe(409);
+        expect(deleteFn).toHaveBeenCalledWith('pool/main/f/foo/foo_1.0_amd64.deb');
+    });
+
+    it('200 idempotent when immutable and existing object has the same hash', async () => {
+        const bucket = finalizeMockR2({
+            head: vi.fn(async () => ({
+                size: 100, etag: 'e', customMetadata: { sha256: sha },
+            } as any)),
+        });
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/finalize', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(bucket));
+        expect(r.status).toBe(200);
+        expect(r.headers.get('X-Content-SHA256')).toBe(sha);
+    });
+
+    it('200 for non-immutable key', async () => {
+        const bucket = finalizeMockR2({
+            head: vi.fn(async () => ({
+                size: 100, etag: 'e', customMetadata: { sha256: sha },
+            } as any)),
+        });
+        const req = new Request('https://x/api/upload/dists/kali-rolling/Release/finalize', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 100, sha256: sha }),
+        });
+        const r = await handleFinalize(req, envFor(bucket));
         expect(r.status).toBe(200);
     });
 });
