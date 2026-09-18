@@ -82,8 +82,10 @@ class Remote:
                         sink.write(data)
                 cmd += ['--data-binary', f'@{data_path}']
             subprocess.run(cmd, check=True)
-        with open(header_path) as sink:
-            lines = sink.read().splitlines()
+            with open(header_path) as sink:
+                lines = sink.read().splitlines()
+            with open(body_path, 'rb') as sink:
+                body = sink.read()
         status_line = lines[0] if lines else ''
         try:
             status = int(status_line.split()[1])
@@ -94,8 +96,6 @@ class Remote:
             if ':' in line:
                 name, _, value = line.partition(':')
                 headers_map[name.strip().lower()] = value.strip()
-        with open(body_path, 'rb') as sink:
-            body = sink.read()
         if status >= 400:
             detail = body[:4096].decode(errors='replace')
             raise RuntimeError(f'{method} {path}: HTTP {status}: {detail}') from None
