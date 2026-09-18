@@ -37,4 +37,11 @@ binding = "APT_BUCKET"
 # parse the same way (no "missing section" surprise between dev and prod).
 [vars]
 
+# Secrets required for /api/upload/{path}/presign (R2 S3-compatible SigV4):
+#   R2_ACCESS_KEY_ID       — R2 API token Access Key ID
+#   R2_SECRET_ACCESS_KEY   — R2 API token Secret Access Key
+# R2_ACCOUNT_ID is a public identifier and lives in [vars] (wrangler-dev.toml).
+# Create the token at Cloudflare Dashboard → R2 → Manage R2 API Tokens,
+# scope it to the APT_BUCKET with Object Read & Write.
+
 # Secrets: ADMIN_PUSH_TOKEN (set via `wrangler secret put`)

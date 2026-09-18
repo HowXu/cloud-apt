@@ -33,4 +33,8 @@ binding = "APT_BUCKET"
 bucket_name = "local-dev-bucket"
 
 # ADMIN_PUSH_TOKEN moved to .dev.vars (local secrets, gitignored).
+# R2_ACCOUNT_ID below is a placeholder for `wrangler dev`; replace with your
+# real account ID (visible at dash.cloudflare.com → R2 → overview).
+# The matching R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY live in .dev.vars.
 [vars]
+R2_ACCOUNT_ID = "replace-me-with-your-account-id"
