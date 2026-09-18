@@ -113,13 +113,13 @@ Value: <生成的强密码>
 
 设置完成后重新部署 Worker。
 
-### 5. 重新部署
+### 6. 重新部署
 
 当前 Cloudflare 会自动在设置 Token 后触发自动构建，你可以跳过这一步
 
 回到 Worker → **Deployments** → 触发重新部署 (例如 push 一个空 commit)
 
-### 6. 绑定自定义域(可选)
+### 7. 绑定自定义域(可选)
 
 Worker → **Triggers** → **Custom Domains** → 添加 `apt.example.com`。
 

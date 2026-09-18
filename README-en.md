@@ -113,13 +113,13 @@ Add the following four values under Worker → **Settings** → **Variables and 
 
 Redeploy the Worker after saving.
 
-### 5. Redeploy
+### 6. Redeploy
 
 Cloudflare currently triggers an automatic build after the Token is set, so you can skip this step.
 
 Back in the Worker → **Deployments** → trigger a redeploy (e.g. push an empty commit).
 
-### 6. Bind a custom domain (optional)
+### 7. Bind a custom domain (optional)
 
 Worker → **Triggers** → **Custom Domains** → add `apt.example.com`.
 
