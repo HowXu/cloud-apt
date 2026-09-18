@@ -633,6 +633,10 @@ def main():
             raise RuntimeError('no pending publication to resume')
         if args.remove and os.environ.get('YES') != '1' and input(f'remove {args.remove}? [y/N] ').lower() != 'y':
             raise RuntimeError('cancelled')
+        # --sync never signs or uploads; the rest needs GPG for the Release signature.
+        if operation['mode'] == 'sync':
+            snapshot = create_publication(root, suite, operation, remote, password=None)
+            return
         password = os.environ.get('GPG_PASSPHRASE') or getpass.getpass('GPG passphrase: ')
         snapshot = create_publication(root, suite, operation, remote, password)
         if snapshot is None:
