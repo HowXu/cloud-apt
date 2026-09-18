@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Bindings } from './env';
 import { proxyR2 } from './proxy';
-import { handleUpload } from './upload';
+import { handleUpload, handleFinalize } from './upload';
 import { handleIndex, handleSearch } from './api-index';
 import { invalidate } from './cache';
 import { checkAuth } from './shared/auth';
@@ -17,7 +17,10 @@ app.post('/api/invalidate', async (c) => {
     return c.text('OK');
 });
 
-app.all('/api/upload/*', (c) => handleUpload(c.req.raw, c.env));
+app.all('/api/upload/*', (c) => {
+    if (c.req.method === 'POST' && c.req.path.endsWith('/finalize')) return handleFinalize(c.req.raw, c.env);
+    return handleUpload(c.req.raw, c.env);
+});
 app.all('/api/publish/:suite', (c) => handlePublish(c.req.raw, c.req.param('suite'), c.env));
 
 app.get('/api/index/:suite/:arch', (c) =>
