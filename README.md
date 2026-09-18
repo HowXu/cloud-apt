@@ -96,6 +96,23 @@ Name: ADMIN_PUSH_TOKEN
 Value: <生成的强密码>
 ```
 
+### 5. 设置 R2 API Token（用于大于 100 MB 的 .deb 预签名上传）
+
+进入 **R2** → **Manage R2 API Tokens** → **Create API Token**：
+- Permissions: Object Read & Write
+- Bucket: 选择与 Worker 绑定的 bucket（默认 `cloud-apt`）
+
+创建后把以下三项加入 Worker → **Settings** → **Variables and Secrets**：
+
+| Name | Type | Value |
+| --- | --- | --- |
+| `R2_ACCESS_KEY_ID` | Secret | API Token 的 `Access Key ID` |
+| `R2_SECRET_ACCESS_KEY` | Secret | API Token 的 `Secret Access Key` |
+| `R2_ACCOUNT_ID` | Variable | Cloudflare 账户 ID（R2 概览页可见） |
+| `R2_BUCKET_NAME` | Variable | Bucket 名（默认 `cloud-apt`） |
+
+设置完成后重新部署 Worker。
+
 ### 5. 重新部署
 
 当前 Cloudflare 会自动在设置 Token 后触发自动构建，你可以跳过这一步

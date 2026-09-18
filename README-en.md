@@ -96,6 +96,23 @@ Name: ADMIN_PUSH_TOKEN
 Value: <a strong secret>
 ```
 
+### 5. Configure the R2 API token (for presigned uploads of files >100 MB)
+
+Open **R2** → **Manage R2 API Tokens** → **Create API Token**:
+- Permissions: Object Read & Write
+- Bucket: pick the bucket bound to your Worker (default `cloud-apt`)
+
+Add the following four values under Worker → **Settings** → **Variables and Secrets**:
+
+| Name | Type | Value |
+| --- | --- | --- |
+| `R2_ACCESS_KEY_ID` | Secret | API token's `Access Key ID` |
+| `R2_SECRET_ACCESS_KEY` | Secret | API token's `Secret Access Key` |
+| `R2_ACCOUNT_ID` | Variable | Cloudflare account ID (visible on the R2 overview) |
+| `R2_BUCKET_NAME` | Variable | Bucket name (default `cloud-apt`) |
+
+Redeploy the Worker after saving.
+
 ### 5. Redeploy
 
 Cloudflare currently triggers an automatic build after the Token is set, so you can skip this step.
