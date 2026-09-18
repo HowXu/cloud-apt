@@ -44,4 +44,11 @@ describe('signR2PutUrl', () => {
         const b = await signR2PutUrl({ ...inputs, customMetadata: { sha256: 'c'.repeat(64) } });
         expect(a.url).not.toBe(b.url);
     });
+
+    it('signs extra headers into the URL', async () => {
+        const { url, headers } = await signR2PutUrl({ ...inputs, extraSignedHeaders: { 'If-None-Match': '*' } });
+        expect(headers['If-None-Match']).toBe('*');
+        const { url: url2 } = await signR2PutUrl({ ...inputs, extraSignedHeaders: { 'If-None-Match': '"abc"' } });
+        expect(url2).not.toBe(url);
+    });
 });

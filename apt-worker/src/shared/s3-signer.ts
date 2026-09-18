@@ -9,6 +9,7 @@ export interface SignR2PutUrlInput {
     expiresIn: number;
     accessKeyId: string;
     secretAccessKey: string;
+    extraSignedHeaders?: Record<string, string>;
     now?: () => number;
 }
 
@@ -28,6 +29,7 @@ export async function signR2PutUrl(input: SignR2PutUrlInput): Promise<SignR2PutU
         ...Object.fromEntries(
             Object.entries(input.customMetadata).map(([k, v]) => [`x-amz-meta-${k.toLowerCase()}`, v]),
         ),
+        ...(input.extraSignedHeaders ?? {}),
     };
     const epochMs = (input.now ?? Date.now)();
     const datetime = new Date(epochMs).toISOString().replace(/[:-]|\.\d{3}/g, '');

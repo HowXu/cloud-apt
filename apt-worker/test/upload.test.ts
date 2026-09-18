@@ -239,6 +239,7 @@ const presignEnv = () => ({
     APT_BUCKET: mockR2() as any,
     ADMIN_PUSH_TOKEN: 'secret',
     R2_ACCOUNT_ID: 'a'.repeat(32),
+    R2_BUCKET_NAME: 'cloud-apt',
     R2_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
     R2_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
 });

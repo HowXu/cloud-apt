@@ -32,19 +32,19 @@ binding = "APT_KV"
 binding = "APT_BUCKET"
 #bucket_name = "input your value and delete # or use cloudflare dashboard"
 
-# Production does not use [vars] (secrets go through `wrangler secret put`).
-# Keeping the empty section here matches wrangler-dev.toml so both configs
-# parse the same way (no "missing section" surprise between dev and prod).
+# Production:
+#   ADMIN_PUSH_TOKEN, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY  →  `wrangler secret put`
+#   R2_ACCOUNT_ID, R2_BUCKET_NAME                              →  [vars] below (public / non-secret)
+# Empty [vars] kept for symmetry with wrangler-dev.toml.
 [vars]
 
 # Secrets required for /api/upload/{path}/presign (R2 S3-compatible SigV4):
 #   R2_ACCESS_KEY_ID       — R2 API token Access Key ID
 #   R2_SECRET_ACCESS_KEY   — R2 API token Secret Access Key
-# R2_ACCOUNT_ID is a public identifier and lives in [vars] (wrangler-dev.toml).
+# Set both via `wrangler secret put`.
 # Create the token at Cloudflare Dashboard → R2 → Manage R2 API Tokens,
 # scope it to the APT_BUCKET with Object Read & Write.
-# R2_BUCKET_NAME holds the bucket the presign flow targets. Recommended:
-# set it via `wrangler secret put R2_BUCKET_NAME` to keep it out of git, or
-# hard-code here if you accept the small leak.
+# R2_ACCOUNT_ID and R2_BUCKET_NAME are public identifiers and live in [vars]
+# above (or wrangler-dev.toml).
 
 # Secrets: ADMIN_PUSH_TOKEN (set via `wrangler secret put`)

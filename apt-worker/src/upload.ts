@@ -201,7 +201,7 @@ export async function handlePresign(req: Request, env: Bindings): Promise<Respon
     const accountId = env.R2_ACCOUNT_ID;
     const accessKeyId = env.R2_ACCESS_KEY_ID;
     const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
-    const bucket = env.R2_BUCKET_NAME ?? (env.APT_BUCKET ? 'cloud-apt' : null);
+    const bucket = env.R2_BUCKET_NAME;
     if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
         return new Response('R2 SigV4 credentials not configured', { status: 500 });
     }
@@ -210,6 +210,7 @@ export async function handlePresign(req: Request, env: Bindings): Promise<Respon
         accountId, bucket, key: validated.key,
         contentType, customMetadata: { sha256: body.sha256.toLowerCase() },
         expiresIn: 600, accessKeyId, secretAccessKey,
+        extraSignedHeaders: isImmutable(validated.key) ? { 'If-None-Match': '*' } : undefined,
     });
     return Response.json({
         url: signedUrl,
