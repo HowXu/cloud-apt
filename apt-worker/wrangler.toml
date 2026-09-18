@@ -43,5 +43,8 @@ binding = "APT_BUCKET"
 # R2_ACCOUNT_ID is a public identifier and lives in [vars] (wrangler-dev.toml).
 # Create the token at Cloudflare Dashboard → R2 → Manage R2 API Tokens,
 # scope it to the APT_BUCKET with Object Read & Write.
+# R2_BUCKET_NAME holds the bucket the presign flow targets. Recommended:
+# set it via `wrangler secret put R2_BUCKET_NAME` to keep it out of git, or
+# hard-code here if you accept the small leak.
 
 # Secrets: ADMIN_PUSH_TOKEN (set via `wrangler secret put`)

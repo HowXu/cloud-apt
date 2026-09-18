@@ -2,8 +2,24 @@ import type { Bindings } from './env';
 import { checkAuth } from './shared/auth';
 import { validateUploadPath, ALLOWED_EXACT } from './shared/path';
 import { digest, isImmutable } from './releases';
+import { signR2PutUrl } from './shared/s3-signer';
 
 const SHA256_RE = /^[a-fA-F0-9]{64}$/;
+const R2_MAX_PUT_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
+
+interface PresignBody {
+    size: number;
+    sha256: string;
+    content_type?: string;
+}
+
+function allowedContentType(key: string, ct: string): boolean {
+    const lc = ct.toLowerCase();
+    if (key.startsWith('pool/')) return lc.startsWith('application/octet-stream') || lc.startsWith('application/vnd.debian.binary-package');
+    if (key.startsWith('dists/')) return ['text/plain', 'application/x-gzip', 'application/gzip', 'application/x-xz', 'application/octet-stream'].some(p => lc.startsWith(p));
+    if (ALLOWED_EXACT.includes(key)) return lc.startsWith('text/plain') || lc.startsWith('application/octet-stream');
+    return false;
+}
 
 export async function handleUpload(req: Request, env: Bindings): Promise<Response> {
     if (req.method !== 'PUT' && req.method !== 'DELETE') {
@@ -141,4 +157,63 @@ export async function handleFinalize(req: Request, env: Bindings): Promise<Respo
         }
     }
     return new Response('OK', { headers: { 'X-Content-SHA256': expectedSha } });
+}
+
+export async function handlePresign(req: Request, env: Bindings): Promise<Response> {
+    if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+    if (!checkAuth(req, env)) return new Response('unauthorized', { status: 401 });
+
+    const url = new URL(req.url);
+    let rawPath: string;
+    try {
+        rawPath = decodeURIComponent(url.pathname.replace(/^\/api\/upload\//, '').replace(/\/presign$/, ''));
+    } catch {
+        return new Response('Invalid path encoding', { status: 400 });
+    }
+
+    const validated = validateUploadPath(rawPath);
+    if (!validated.ok) return new Response(`Bad Request: ${validated.error}`, { status: 400 });
+
+    let body: PresignBody;
+    try {
+        const text = await req.text();
+        if (text.length > 64 * 1024) return new Response('Presign body too large', { status: 413 });
+        body = JSON.parse(text);
+    } catch {
+        return new Response('Invalid JSON body', { status: 400 });
+    }
+    if (!body || typeof body.size !== 'number' || !Number.isSafeInteger(body.size) || body.size <= 0) {
+        return new Response('Invalid size', { status: 400 });
+    }
+    if (typeof body.sha256 !== 'string' || !SHA256_RE.test(body.sha256)) {
+        return new Response('Invalid sha256', { status: 400 });
+    }
+    if (body.size > R2_MAX_PUT_BYTES) {
+        return new Response('Size exceeds 5 GB R2 single-PUT limit', { status: 413 });
+    }
+
+    const contentType = body.content_type || (validated.key.startsWith('pool/')
+        ? 'application/octet-stream' : 'application/octet-stream');
+    if (!allowedContentType(validated.key, contentType)) {
+        return new Response(`Invalid Content-Type for ${validated.key}`, { status: 400 });
+    }
+
+    const accountId = env.R2_ACCOUNT_ID;
+    const accessKeyId = env.R2_ACCESS_KEY_ID;
+    const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
+    const bucket = env.R2_BUCKET_NAME ?? (env.APT_BUCKET ? 'cloud-apt' : null);
+    if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
+        return new Response('R2 SigV4 credentials not configured', { status: 500 });
+    }
+
+    const { url: signedUrl, headers, expiresAt } = await signR2PutUrl({
+        accountId, bucket, key: validated.key,
+        contentType, customMetadata: { sha256: body.sha256.toLowerCase() },
+        expiresIn: 600, accessKeyId, secretAccessKey,
+    });
+    return Response.json({
+        url: signedUrl,
+        headers,
+        expires_in: expiresAt - Math.floor(Date.now() / 1000),
+    });
 }

@@ -38,3 +38,4 @@ bucket_name = "local-dev-bucket"
 # The matching R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY live in .dev.vars.
 [vars]
 R2_ACCOUNT_ID = "replace-me-with-your-account-id"
+R2_BUCKET_NAME = "local-dev-bucket"

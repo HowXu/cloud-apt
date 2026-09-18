@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handleUpload, handleFinalize } from '../src/upload';
+import { handleUpload, handleFinalize, handlePresign } from '../src/upload';
 
 const mockR2 = () => ({
     put: vi.fn(async () => ({})),
@@ -231,6 +231,114 @@ describe('handleFinalize', () => {
             body: JSON.stringify({ size: 100, sha256: sha }),
         });
         const r = await handleFinalize(req, envFor(bucket));
+        expect(r.status).toBe(200);
+    });
+});
+
+const presignEnv = () => ({
+    APT_BUCKET: mockR2() as any,
+    ADMIN_PUSH_TOKEN: 'secret',
+    R2_ACCOUNT_ID: 'a'.repeat(32),
+    R2_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
+    R2_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+});
+
+describe('handlePresign', () => {
+    it('401 without Bearer', async () => {
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/presign', {
+            method: 'POST', body: JSON.stringify({ size: 1, sha256: 'a'.repeat(64) }),
+        });
+        const r = await handlePresign(req, presignEnv());
+        expect(r.status).toBe(401);
+    });
+
+    it('400 for unsafe path', async () => {
+        const req = new Request('https://x/api/upload/../etc/passwd/presign', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 1, sha256: 'a'.repeat(64) }),
+        });
+        const r = await handlePresign(req, presignEnv());
+        expect(r.status).toBe(400);
+    });
+
+    it('400 for non-pool/dist path', async () => {
+        const req = new Request('https://x/api/upload/random/x/presign', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 1, sha256: 'a'.repeat(64) }),
+        });
+        const r = await handlePresign(req, presignEnv());
+        expect(r.status).toBe(400);
+    });
+
+    it('400 for malformed JSON', async () => {
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/presign', {
+            method: 'POST', headers: { Authorization: 'Bearer secret' }, body: '{not json',
+        });
+        const r = await handlePresign(req, presignEnv());
+        expect(r.status).toBe(400);
+    });
+
+    it('400 for invalid sha256', async () => {
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/presign', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 1, sha256: 'nope' }),
+        });
+        const r = await handlePresign(req, presignEnv());
+        expect(r.status).toBe(400);
+    });
+
+    it('413 for size above 5 GB', async () => {
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/presign', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 5_368_709_122, sha256: 'a'.repeat(64) }),
+        });
+        const r = await handlePresign(req, presignEnv());
+        expect(r.status).toBe(413);
+    });
+
+    it('500 when R2_ACCOUNT_ID / R2_ACCESS_KEY_ID missing', async () => {
+        const e = { ...presignEnv() } as any;
+        delete e.R2_ACCOUNT_ID;
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/presign', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret' },
+            body: JSON.stringify({ size: 1, sha256: 'a'.repeat(64) }),
+        });
+        const r = await handlePresign(req, e);
+        expect(r.status).toBe(500);
+    });
+
+    it('200 with presigned URL + headers + expires_in for pool/ deb', async () => {
+        const req = new Request('https://x/api/upload/pool/main/f/foo/foo_1.0_amd64.deb/presign', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                size: 1234, sha256: 'a'.repeat(64),
+                content_type: 'application/octet-stream',
+            }),
+        });
+        const r = await handlePresign(req, presignEnv());
+        expect(r.status).toBe(200);
+        const body = await r.json() as { url: string; headers: Record<string, string>; expires_in: number };
+        expect(body.url).toMatch(/^https:\/\/a{32}\.r2\.cloudflarestorage\.com\//);
+        expect(body.headers['Content-Type']).toBe('application/octet-stream');
+        expect(body.headers['x-amz-meta-sha256']).toBe('a'.repeat(64));
+        expect(body.expires_in).toBe(600);
+    });
+
+    it('200 for dists/ Release with text/plain content-type', async () => {
+        const req = new Request('https://x/api/upload/dists/kali-rolling/main/binary-amd64/Release/presign', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer secret', 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                size: 100, sha256: 'a'.repeat(64), content_type: 'text/plain',
+            }),
+        });
+        const r = await handlePresign(req, presignEnv());
         expect(r.status).toBe(200);
     });
 });
