@@ -14,16 +14,16 @@
 
 Deploy a private APT repository with a browse UI using just one Cloudflare Worker.
 
-Supports local reprepro signing + curl-based push; apt clients work directly.
+Supports local GPG signing + curl-based push; apt clients work directly. The Worker owns every `.deb` content-addressed in R2, so the local-repo only carries the signing key and a `packages.json` manifest.
 
 Architectural pattern inspired by [cloud-maven](https://github.com/HowXu/cloud-maven).
 
 ## Features
 
 - **One-click deploy** — Fork the repo, import via the Cloudflare Dashboard, no servers to manage
-- **GPG signing** — Local reprepro signing; apt client strong verification passes
+- **GPG signing** — Local GPG signing (ed25519); apt client strong verification passes
 - **Vue 3 browse UI** — package list, details, and search
-- **R2 object storage** — deb files + apt metadata pushed straight to R2
+- **R2 object storage** — deb files + apt metadata pushed straight to R2, immutable per sha256
 - **Worker push API** — `PUT /api/upload/{path}` with bearer token authentication
 - **Multi-architecture support**
 
@@ -34,7 +34,7 @@ Architectural pattern inspired by [cloud-maven](https://github.com/HowXu/cloud-m
 - **Frontend**: Vue 3 + TypeScript + Vite + UnoCSS
 - **Storage**: Cloudflare R2 + Workers KV
 - **Security**: Bearer Token, R2 private, GPG signing
-- **Local**: reprepro + GPG (ed25519) + podman + curl
+- **Local**: GPG (ed25519) + curl + Python 3.10+ (stdlib only)
 
 ## Directory Structure
 
@@ -51,9 +51,9 @@ cloud-apt
 │   │   ├── migrate.py    # core: export/import + GPG-encrypted config.env
 │   │   ├── repo_state.py # shared: GPG home, repo lock, SHA256
 │   │   └── lib-*.sh      # bash common
-│   ├── conf/             # reprepro distributions
+│   ├── conf/             # APT distribution metadata (Suite/Architectures/Components)
 │   ├── keys/             # GPG key pair
-│   └── ...               # db/ pool/ dists/ incoming/ created at runtime
+│   └── packages.json     # catalog synced from the worker
 └── example/              # Sample .deb packages for end-to-end testing
     ├── build.sh          # build
     ├── cloud-apt-hello/  # C, libc6
@@ -150,10 +150,9 @@ sudo apt update && sudo apt install myapp
 
 Contents:
 - `keys`: encrypted private key, public key, and `keyid.txt`
-- `conf`: reprepro config
-- `db`: reprepro database
-- `pool`: package files
-- `dists`: indexes and signatures
+- `conf`: APT distribution metadata
+- `packages.json`: catalog of every deb the worker should serve
+- `dists`: most recent signed indexes (optional; the worker keeps these too)
 - `config.env.gpg`: `config.env` encrypted with `keys/public.key`
 
 
@@ -161,13 +160,14 @@ Contents:
 
 ```bash
 ./local-repo/scripts/migrate-import.sh /path/set-a-name.tar.gz
+./local-repo/scripts/push.sh --sync kali-rolling   # align packages.json with the server
 ./local-repo/scripts/push.sh path/to/package.deb
 ```
 
 The import script automatically:
 - Decrypts `config.env.gpg` to `local-repo/config.env` using the GPG private key
-- Replaces the state subdirectories
-- Runs `./local-repo/scripts/build-and-push.sh --sync kali-rolling` automatically when `dists/` is non-empty
+- Replaces the state subdirectories under `local-repo/`
+- Backs up the previous state to `<target>.bak.<unique-suffix>`
 
 ## Development
 

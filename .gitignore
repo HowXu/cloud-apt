@@ -13,13 +13,13 @@ coverage/
 local-repo/conf/distributions
 # GPG
 local-repo/keys/
-# reprepro SQLite
-local-repo/db/
-# .deb
-local-repo/pool/
-# Release/Packages
+# Local catalog (synced from worker, regenerable)
+local-repo/packages.json
+# Release/Packages (regenerable from worker)
 local-repo/dists/
-# temprary
+# Pre-migration leftovers (kept only so old users can run reprepro-to-catalog.sh)
+local-repo/db/
+local-repo/pool/
 local-repo/incoming/
 local-repo/.publish/
 local-repo/.repository.lock

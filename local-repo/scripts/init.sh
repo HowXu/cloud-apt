@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Public entry: first-time initialization of the cloud-apt local repo.
-# Flow: dependency check -> config -> directories -> GPG key -> upload
-# public key + client install script.
+# Flow: dependency check -> config -> GPG key -> upload public key + client
+# install script -> sync packages.json from server.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 info "Initializing cloud-apt"
 
 # 1. Dependency check
-for cmd in curl gpg reprepro python3 mktemp sed; do
+for cmd in curl gpg python3 mktemp sed tar; do
     command -v "$cmd" >/dev/null 2>&1 || die "Missing dependency: $cmd (apt install $cmd)"
 done
 
@@ -23,8 +23,6 @@ ADMIN_PUSH_TOKEN="${ADMIN_PUSH_TOKEN:-}"
 
 if load_config; then
     info "Loaded existing config from $CONFIG_PATH"
-else
-    :
 fi
 
 # 2.5 Short-circuit if the local state already matches the Worker. After a
@@ -73,12 +71,15 @@ fi
 
 write_config || die "Failed to write $CONFIG_PATH"
 
-# 3. Local repo directories
+# 3. Working directories (no db/, pool/, or incoming/ — the worker owns pool/).
 export CLOUD_APT_ROOT="${CLOUD_APT_ROOT:-$SCRIPT_DIR/..}"
-"$SCRIPT_DIR/setup-reprepro.sh"
+ROOT="$CLOUD_APT_ROOT"
+mkdir -p "$ROOT/keys"
+chmod 700 "$ROOT/keys"
+[[ -f "$ROOT/conf/distributions" ]] || cp "$ROOT/conf/distributions.template" "$ROOT/conf/distributions"
 
 # 4. GPG key (reuse or generate)
-KEY_DIR="$CLOUD_APT_ROOT/keys"
+KEY_DIR="$ROOT/keys"
 have_full_key=0
 [[ -s "$KEY_DIR/public.key" && -s "$KEY_DIR/private.key.gpg" && -s "$KEY_DIR/keyid.txt" ]] && have_full_key=1
 
@@ -93,6 +94,20 @@ fi
 export WORKER_URL ADMIN_PUSH_TOKEN
 "$SCRIPT_DIR/push-key.sh"
 "$SCRIPT_DIR/push-install.sh"
+
+# 6. Sync packages.json from server so subsequent pushes know what is already
+#    published (idempotent --safe-create).
+if [[ ! -s "$ROOT/packages.json" ]]; then
+    info "Syncing packages.json from $WORKER_URL"
+    if curl -fsS -H "Authorization: Bearer $ADMIN_PUSH_TOKEN" \
+        "$WORKER_URL/api/publish/${CODENAME:-kali-rolling}" -o "$ROOT/packages.json.tmp"; then
+        python3 -c "import json,sys; d=json.load(open('$ROOT/packages.json.tmp')); json.dump(d.get('packages', []), open('$ROOT/packages.json','w'), indent=2)"
+        rm -f "$ROOT/packages.json.tmp"
+        ok "packages.json synced"
+    else
+        warn "Could not fetch packages.json; starting empty (run \`push.sh --sync\` later)"
+    fi
+fi
 
 ok "Initialization complete"
 ok "Client: curl -fsSL ${WORKER_URL}/install.sh | sudo bash"

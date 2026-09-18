@@ -46,7 +46,7 @@ if [[ ${#GPG_PASSPHRASE} -lt 12 ]]; then
     exit 1
 fi
 
-# Prompt for the GPG email; it will be written into reprepro.conf's SignWith.
+# Prompt for the GPG email; recorded in keys/keyid.txt for the worker.
 read -rp "Enter GPG email (e.g. apt@example.com): " GPG_EMAIL
 if [[ -z "$GPG_EMAIL" ]]; then
     echo "[ERROR] Email cannot be empty" >&2
@@ -54,10 +54,9 @@ if [[ -z "$GPG_EMAIL" ]]; then
 fi
 
 # Defend against multi-key collisions: if the keyring already has a
-# private key for this email, refuse to generate again. reprepro
-# defaults to signing InRelease with the newest key while push-key.sh
-# exports the first key as pubkey, and a mismatch breaks apt update
-# on the client with "Missing key ...".
+# private key for this email, refuse to generate again. The push-key.sh
+# uploads the first key as pubkey.asc, and a keyring mismatch breaks
+# apt update on the client with "Missing key ...".
 EXISTING=$(gpg --list-secret-keys --with-colons "$GPG_EMAIL" 2>/dev/null \
     | awk -F: '/^fpr:/ {print $10}' || true)
 if [[ -n "$EXISTING" ]]; then
@@ -113,8 +112,8 @@ if [[ -z "$FPR" ]]; then
 fi
 
 # Add an encryption subkey so config.env can be encrypted to this key in
-# future archive exports. The primary remains sign-only (reprepro only
-# needs to sign). Passphrase via fd 3 to keep it out of argv / disk.
+# future archive exports. The primary remains sign-only (only used to
+# sign Releases). Passphrase via fd 3 to keep it out of argv / disk.
 gpg --batch --pinentry-mode loopback --passphrase-fd 3 \
     --quick-add-key "$FPR" cv25519 encr 0 \
     3<<<"$GPG_PASSPHRASE"
@@ -168,26 +167,6 @@ if [[ "$ACTUAL_FPR" != "$FPR" ]]; then
     echo "          gpg --list-secret-keys --with-colons $GPG_EMAIL" >&2
     exit 1
 fi
-
-# Keep conf/distributions' SignWith in sync. Previously this was
-# silently skipped when conf/distributions did not exist, leaving a
-# __GPG_EMAIL__ placeholder that would later confuse build-and-push.sh.
-DIST_FILE="$REPO_ROOT/conf/distributions"
-if [[ ! -f "$DIST_FILE" ]]; then
-    echo "[ERROR] $DIST_FILE does not exist" >&2
-    echo "        Run ./local-repo/scripts/setup-reprepro.sh first to initialize the repo layout" >&2
-    exit 1
-fi
-sed -i "s|SignWith:.*|SignWith: $GPG_EMAIL|" "$DIST_FILE"
-
-# Defensive: confirm the replacement actually took effect (sed silent
-# failure or template drift).
-if grep -q '^SignWith:.*__GPG_EMAIL__' "$DIST_FILE"; then
-    echo "[ERROR] SignWith replacement failed; placeholder is still present" >&2
-    echo "        The template format may have changed; inspect $DIST_FILE manually" >&2
-    exit 1
-fi
-echo "[OK]    Updated SignWith in $DIST_FILE"
 
 echo ""
 echo "[OK]    Key generation complete"

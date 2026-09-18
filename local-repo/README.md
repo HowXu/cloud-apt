@@ -10,10 +10,15 @@ commands cover everything:
 
 ## Tool requirements
 
-- reprepro
+- `dpkg-deb` (already on any Debian-derived host)
 - GPG 2.x
 - curl
-- Python 3.10+,the publisher and migrate use only the standard library, no pip dependencies
+- tar / gzip (for migrate)
+- Python 3.10+ — the publisher and migrate use only the standard library, no pip dependencies
+
+> No reprepro, no `db/`, no `pool/`, no `incoming/`. The Worker owns
+> every `.deb` content-addressed in R2; the local-repo/ only carries
+> the GPG signing key and a `packages.json` manifest.
 
 ## Configuration
 
@@ -32,11 +37,10 @@ ADMIN_PUSH_TOKEN="..."
 
 ## Advanced entry points
 
-`build-and-push.sh --remove <pkg>` and `--sync` are still available for
-advanced maintenance.
+`build-and-push.sh --remove <pkg>`, `--sync`, and `--resume` are still
+available for advanced maintenance.
 
-For migration use `migrate-export.sh` /
-`migrate-import.sh`.
+For migration use `migrate-export.sh` / `migrate-import.sh`.
 
 ## Publishing, retry, and version consistency
 
@@ -97,29 +101,24 @@ should re-run `apt update`.
 ./local-repo/scripts/push.sh path/to/package.deb   # ready to go
 ```
 
-Export covers only `keys/`, `conf/`, `db/`, `pool/`, `dists/` and
-`config.env.gpg` — no token, no staging, no scripts. V2 backups record
-a SHA256 per file. `INCLUDE_DISTS=0` skips
-indexes; recover them later by re-running `migrate-import` on the same
-archive. the script will skip `--sync` because `dists/` is empty.
+Export covers only `keys/`, `conf/`, `dists/`, `packages.json`, and
+`config.env.gpg` — no token, no staging, no scripts. Backups record a
+SHA256 per file. `INCLUDE_DISTS=0` skips indexes; you can still resume
+publishing afterwards because the server keeps every `.deb` immutable.
 
 Import extracts next to the target, refuses path traversal, links,
 special files, and duplicate entries; only after verifying the
-manifest, key fingerprint, decrypted private key, signature
-self-check, and reprepro database references does it replace the
-state subdirectories. `config.env` is decrypted into
-`local-repo/config.env` so `push.sh` works immediately. The
-old state and old publish staging are saved to
+manifest, key fingerprint, decrypted private key, and signature
+self-check does it replace the state subdirectories. `config.env` is
+decrypted into `local-repo/config.env` so `push.sh` works immediately.
+The old state and old publish staging are saved to
 `<target>.bak.<unique-suffix>`. Catchable errors during the swap roll
 back automatically; on power loss / SIGKILL, keep that backup and
 recover by hand.
 
-After `replace_state`, if the target's `dists/` already has content,
-the import script automatically runs
-`./local-repo/scripts/build-and-push.sh --sync kali-rolling` so the
-remote state matches the imported repository. The same GPG passphrase
-is piped in via stdin; a `--sync` failure is a warning, not a fatal
-error — you may re-run `--sync` manually.
+After `replace_state`, run `./local-repo/scripts/push.sh --sync
+kali-rolling` (one manual command) so the local `packages.json` aligns
+with whatever the server currently publishes.
 
 Both publisher and migration use a temporary isolated GPG keyring,
 restoring the requested private key from the encrypted backup. They
@@ -128,10 +127,27 @@ keys globally. Passphrases go to GPG via stdin, and the temporary
 agent is destroyed on exit. **No need to run `init.sh` on the target
 machine** — `config.env` arrives via the archive.
 
+## Upgrading from a reprepro-based install
+
+If you previously ran an older cloud-apt that stored `db/`, `pool/`,
+and `incoming/` on the publishing machine, run the one-shot migration
+before the first push with the new scripts:
+
+```bash
+./local-repo/scripts/reprepro-to-catalog.sh   # writes packages.json from db/
+# Optional: remove reprepro + the now-unused state dirs.
+rm -rf local-repo/{db,pool,incoming}
+./local-repo/scripts/push.sh --sync kali-rolling
+```
+
+The script walks `db/**/Packages*`, parses every block, and writes
+`packages.json`. Anything already in the server's pool/ stays there —
+no deb bytes are re-uploaded; only `packages.json` is new.
+
 ## Regression tests
 
 ```bash
-sudo apt-get install reprepro gnupg python3
+sudo apt-get install gnupg python3 dpkg-dev
 python3 -m unittest discover -s local-repo/test -v
 ```
 

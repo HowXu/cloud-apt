@@ -27,30 +27,32 @@ class FakeRemote:
 
     def __init__(self):
         self.files, self.calls, self.active = {}, [], None
+        self.active_packages = []
 
     def current(self, suite):
-        return {'etag': self.active, 'release': self.active}
+        return {'etag': self.active, 'release': self.active, 'packages': self.active_packages}
 
-    def upload(self, root, record, on_progress=None):
+    def upload(self, snapshot, record, on_progress=None):
         self.calls.append(record['key'])
-        path = root / record['local']
+        path = snapshot / record['local']
         if sha256(path) != record['sha256']:
             raise RuntimeError('corrupt snapshot')
         self.files[record['key']] = path.read_bytes()
 
-    def commit(self, state):
-        if self.active == state['release']:
+    def commit(self, suite, release, previous, files, packages):
+        if self.active == release:
             return
-        if self.active != state['previous']:
+        if self.active != previous:
             raise RuntimeError('concurrent publication')
-        for f in state['files']:
+        for f in files:
             if f['key'] not in self.files:
                 raise RuntimeError('missing remote file')
-        self.active = state['release']
+        self.active = release
+        self.active_packages = packages
 
 
 def _ensure_gpg_tools():
-    for cmd in ('gpg', 'gpgconf', 'reprepro', 'dpkg-deb'):
+    for cmd in ('gpg', 'gpgconf', 'dpkg-deb'):
         if not shutil.which(cmd):
             raise RuntimeError(f'Missing required integration-test tool: {cmd}')
 
@@ -82,14 +84,14 @@ def _fixture():
 
 
 def _init_repo(root, keys, fingerprint):
-    for name in ('conf', 'db', 'pool', 'dists', 'scripts', 'local-repo', 'local-repo/scripts'):
+    for name in ('conf', 'dists', 'scripts', 'local-repo', 'local-repo/scripts'):
         (root / name).mkdir(parents=True, exist_ok=True)
     shutil.copytree(keys, root / 'keys')
     (root / 'local-repo/scripts/sentinel').write_text('installed tools')
     (root / 'conf/distributions.template').write_text('installed template')
     (root / 'conf/distributions').write_text(
         f'Origin: cloud-apt\nLabel: Test\nCodename: {SUITE}\nSuite: {SUITE}\n'
-        f'Architectures: amd64 arm64\nComponents: main\nSignWith: {fingerprint}\n')
+        f'Architectures: amd64 arm64\nComponents: main\n')
 
 
 def _deb(stage_dir, version):
@@ -141,9 +143,9 @@ class OneClickTests(unittest.TestCase):
         dst = Path(self.tmp.name) / 'dst'
         dst.mkdir()
         (dst / 'local-repo').mkdir()
-        # Use a mock so post_import_sync does not actually call build-and-push.sh
-        with mock.patch('migrate.post_import_sync') as sync:
-            import_repository(archive, dst, PASSWORD)
+        # post_import_sync has been removed; import only restores state, the user
+        # runs ./push.sh --sync next to align packages.json with the remote.
+        import_repository(archive, dst, PASSWORD)
 
         config_env = dst / 'local-repo' / 'config.env'
         self.assertTrue(config_env.exists(), 'config.env must land in local-repo/')
@@ -153,40 +155,30 @@ class OneClickTests(unittest.TestCase):
         self.assertIn('ADMIN_PUSH_TOKEN=', content)
         self.assertIn('secret-token-abc', content)
         # State dirs land under local-repo/, matching the source layout.
-        for name in ('keys', 'conf', 'db', 'pool'):
+        for name in ('keys', 'conf'):
             self.assertTrue((dst / 'local-repo' / name).is_dir(),
                             f'{name} missing under local-repo/')
-        sync.assert_called_once()
+        self.assertTrue((dst / 'local-repo' / 'packages.json').is_file())
 
-    def test_post_import_sync_called_when_dists_populated(self):
+    def test_import_with_dists_in_archive_preserves_them(self):
         remote = FakeRemote()
         src = Path(self.tmp.name) / 'src'
         src.mkdir()
         _init_repo(src, self.keys, self.fingerprint)
         _populate_source(src, remote, self.fingerprint)
+        # Plant an extra marker in src/dists/ to assert archive contents round-trip.
+        (src / 'dists/marker').write_text('kept')
         archive = src / 'backup.tar.gz'
         export_repository(src, archive)
 
         dst = Path(self.tmp.name) / 'dst'
         dst.mkdir()
         (dst / 'local-repo').mkdir()
-        # Pre-populate dists/ to simulate a target that already has indexes
-        (dst / 'dists').mkdir()
-        (dst / 'dists/.placeholder').write_text('existing')
+        import_repository(archive, dst, PASSWORD)
+        self.assertTrue((dst / 'local-repo' / 'dists' / 'marker').is_file())
+        self.assertEqual((dst / 'local-repo' / 'dists' / 'marker').read_text(), 'kept')
 
-        called = []
-
-        def fake_sync(repo_root, password):
-            called.append((Path(repo_root), password))
-            return None
-
-        with mock.patch('migrate.post_import_sync', side_effect=fake_sync):
-            import_repository(archive, dst, PASSWORD)
-        self.assertEqual(len(called), 1)
-        self.assertEqual(called[0][1], PASSWORD)
-        self.assertTrue((called[0][0] / 'dists').exists())
-
-    def test_post_import_sync_skipped_when_dists_empty(self):
+    def test_import_without_dists_creates_empty_directory(self):
         remote = FakeRemote()
         src = Path(self.tmp.name) / 'src'
         src.mkdir()
@@ -198,16 +190,9 @@ class OneClickTests(unittest.TestCase):
         dst = Path(self.tmp.name) / 'dst'
         dst.mkdir()
         (dst / 'local-repo').mkdir()
-        # Do not pre-create dists/; archive has no dists either.
-
-        called = []
-
-        def fake_sync(repo_root, password):
-            called.append((Path(repo_root), password))
-
-        with mock.patch('migrate.post_import_sync', side_effect=fake_sync):
-            import_repository(archive, dst, PASSWORD)
-        self.assertEqual(called, [], 'post_import_sync must be a no-op for empty dists/')
+        import_repository(archive, dst, PASSWORD)
+        self.assertTrue((dst / 'local-repo' / 'dists').is_dir())
+        self.assertEqual(list((dst / 'local-repo' / 'dists').iterdir()), [])
 
     def test_replace_state_rolls_back_config_env_on_partial_failure(self):
         src = Path(self.tmp.name) / 'src'
@@ -219,13 +204,13 @@ class OneClickTests(unittest.TestCase):
 
         stage = Path(self.tmp.name) / 'stage'
         stage.mkdir()
-        for name in ('keys', 'conf', 'db', 'pool', 'dists'):
+        for name in ('keys', 'conf', 'dists'):
             (stage / name).mkdir()
             (stage / name / 'new').write_text('new')
         (stage / 'config.env').write_text('WORKER_URL="https://new.example"\nADMIN_PUSH_TOKEN="new-token"\n')
 
         def failing_replace(source, destination):
-            if Path(source) == stage / 'db':
+            if Path(source) == stage / 'dists':
                 raise OSError('simulated disk failure')
             os.replace(source, destination)
 

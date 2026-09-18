@@ -1,6 +1,5 @@
 Origin: cloud-apt
 Label: Personal APT Repository
-SignWith: dev@howxu.cn
 Codename: kali-rolling
 Suite: kali-rolling
 Architectures: amd64 arm64

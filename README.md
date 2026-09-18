@@ -14,16 +14,16 @@
 
 只需一个 Cloudflare Worker，即可部署带浏览界面的 APT 私有仓库
 
-支持 reprepro 本地 GPG 签名 + curl 推送，客户端直接可用
+支持本地 GPG 签名 + curl 推送，客户端直接可用。Worker 把每个 `.deb` 按内容寻址存进 R2，本地仓库仅保留签名密钥和一份 `packages.json` 清单。
 
 参考 [cloud-maven](https://github.com/HowXu/cloud-maven)的架构模式
 
 ## 功能特性
 
 - **一键部署** — Fork 仓库后通过 Cloudflare Dashboard 导入，无需管理服务器
-- **GPG 签名** — reprepro 本地签名，`apt` 客户端强校验通过
+- **GPG 签名** — 本地 GPG 签名 (ed25519)，`apt` 客户端强校验通过
 - **Vue 3 浏览界面** — 包列表、详情、搜索
-- **R2 对象存储** — deb 文件与 apt 元数据直传 R2
+- **R2 对象存储** — deb 文件与 apt 元数据直传 R2，按 sha256 不可变
 - **Worker 推送 API** — `PUT /api/upload/{path}` 鉴权推送
 - **多架构支持**
 
@@ -34,7 +34,7 @@
 - **前端**: Vue 3 + TypeScript + Vite + UnoCSS
 - **存储**: Cloudflare R2  + Workers KV
 - **安全**: Bearer Token, R2 私有, GPG 签名
-- **本地**: reprepro + GPG (ed25519) + podman + curl
+- **本地**: GPG (ed25519) + curl + Python 3.10+ (标准库)
 
 ## 目录结构
 
@@ -51,9 +51,9 @@ cloud-apt
 │   │   ├── migrate.py    # 核心: 导出/导入 + GPG 加密 config.env
 │   │   ├── repo_state.py # 共享: GPG home、repo 锁、SHA256
 │   │   └── lib-*.sh      # bash 公共
-│   ├── conf/             # reprepro distributions
+│   ├── conf/             # APT 发行版元数据 (Suite/Architectures/Components)
 │   ├── keys/             # GPG 密钥对
-│   └── ...               # db/ pool/ dists/ incoming/ 运行时生成
+│   └── packages.json     # 从 worker 同步的包目录
 └── example/              # 端到端测试用 .deb 样例
     ├── build.sh          # 构建
     ├── cloud-apt-hello/  # C, libc6
@@ -150,10 +150,9 @@ sudo apt update && sudo apt install myapp
 
 内容包括：
 - `keys`:加密私钥，公钥，以及`keyid.txt`
-- `conf`:reprepro 配置
-- `db`:reprepro 数据库
-- `pool`:包文件
-- `dists`:索引和签名
+- `conf`:APT 发行版元数据
+- `packages.json`:worker 应该服务的全部 deb 目录
+- `dists`:最近一次的已签名索引（可选，worker 也保留这些）
 - `config.env.gpg`:`config.env` 用 `keys/public.key` 的公钥加密后的产物
 
 
@@ -161,13 +160,14 @@ sudo apt update && sudo apt install myapp
 
 ```bash
 ./local-repo/scripts/migrate-import.sh /path/set-a-name.tar.gz
+./local-repo/scripts/push.sh --sync kali-rolling   # 同步 packages.json 与 server
 ./local-repo/scripts/push.sh path/to/package.deb
 ```
 
 导入脚本会自动：
 - 用 GPG 私钥解密 `config.env.gpg` 到 `local-repo/config.env`
-- 替换 state 子目录
-- 在 `dists/` 非空时自动 `./local-repo/scripts/build-and-push.sh --sync kali-rolling`
+- 替换 `local-repo/` 下的 state 子目录
+- 把旧 state 与 publish staging 备份到 `<target>.bak.<unique-suffix>`
 
 ## 开发
 

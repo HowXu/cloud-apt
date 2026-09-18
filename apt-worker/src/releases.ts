@@ -2,10 +2,40 @@ import type { Bindings } from './env';
 import { checkAuth } from './shared/auth';
 import { validateSuite, validateUploadPath } from './shared/path';
 
+function safeRelative(name: string): boolean {
+    if (!name) return false;
+    if (name.startsWith('/')) return false;
+    const parts = name.split('/');
+    for (const part of parts) if (part === '' || part === '.' || part === '..') return false;
+    for (const ch of name) if (ch === '\\' || ch === '\0' || ch === '\r' || ch === '\n') return false;
+    return true;
+}
+
 export const releaseKey = (suite: string) => `releases/${suite}.json`;
 const RELEASE_ID = /^[a-f0-9]{32}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
+const ARCH = /^[a-z0-9][a-z0-9.+-]{0,31}$/;
 type FileRecord = { key: string; sha256: string; size: number };
+export type PackageRecord = {
+    package: string;
+    version: string;
+    architecture: string;
+    filename: string;
+    sha256: string;
+    size: number;
+};
+
+function validatePackage(record: unknown): record is PackageRecord {
+    if (!record || typeof record !== 'object') return false;
+    const r = record as Record<string, unknown>;
+    if (typeof r.package !== 'string' || !/^[a-z0-9][a-z0-9.+-]{1,62}$/.test(r.package)) return false;
+    if (typeof r.version !== 'string' || r.version.length === 0 || r.version.length > 128) return false;
+    if (typeof r.architecture !== 'string' || !ARCH.test(r.architecture)) return false;
+    if (typeof r.filename !== 'string' || !safeRelative(r.filename) || !r.filename.startsWith('pool/')) return false;
+    if (typeof r.sha256 !== 'string' || !SHA256.test(r.sha256)) return false;
+    if (!Number.isSafeInteger(r.size) || (r.size as number) <= 0) return false;
+    return true;
+}
 
 export function isImmutable(key: string): boolean {
     return key.startsWith('pool/') || key.includes('/by-hash/') || key.includes('/.snapshots/');
@@ -28,18 +58,25 @@ export async function handlePublish(req: Request, suite: string, env: Bindings):
     if (!bucket) return new Response('R2 not bound', { status: 500 });
     if (req.method === 'GET') {
         const current = await bucket.get(releaseKey(suite));
-        return Response.json({ release: current ? (await current.json<{ release: string }>()).release : null,
-            etag: current?.etag ?? null }, { headers: { 'Cache-Control': 'no-store' } });
+        if (!current) {
+            return Response.json({ release: null, etag: null, packages: [] },
+                { headers: { 'Cache-Control': 'no-store' } });
+        }
+        const data = await current.json<{ release: string; packages?: PackageRecord[] }>();
+        return Response.json({
+            release: data.release, etag: current.etag, packages: data.packages ?? [],
+        }, { headers: { 'Cache-Control': 'no-store' } });
     }
     if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
-    let data: { release: string; previous: string | null; files: FileRecord[] };
+    let data: { release: string; previous: string | null; files: FileRecord[]; packages?: PackageRecord[] };
     try {
         const body = await req.text();
         if (body.length > 1024 * 1024) return new Response('Manifest too large', { status: 413 });
-        data = JSON.parse(body);
-        if (!data || !RELEASE_ID.test(data.release) ||
-            !(data.previous === null || typeof data.previous === 'string') ||
-            !Array.isArray(data.files) || !data.files.length) throw new Error();
+        const parsed = JSON.parse(body);
+        if (!parsed || !RELEASE_ID.test(parsed.release) ||
+            !(parsed.previous === null || typeof parsed.previous === 'string') ||
+            !Array.isArray(parsed.files) || !parsed.files.length) throw new Error();
+        data = parsed;
         const prefix = `dists/${suite}/.snapshots/${data.release}/`;
         const seen = new Set<string>();
         for (const f of data.files) {
@@ -53,6 +90,17 @@ export async function handlePublish(req: Request, suite: string, env: Bindings):
         for (const name of ['InRelease', 'Release', 'Release.gpg']) {
             if (!seen.has(prefix + name)) throw new Error();
         }
+        // `packages` is optional for backward compatibility with older publishers
+        // that pre-date the catalog API; missing/empty means the catalog will
+        // appear empty on subsequent GETs until the next commit supplies it.
+        const packages = Array.isArray(data.packages) ? data.packages : [];
+        const packageFilenames = new Set<string>();
+        for (const p of packages) {
+            if (!validatePackage(p)) throw new Error();
+            if (packageFilenames.has(p.filename)) throw new Error();
+            packageFilenames.add(p.filename);
+        }
+        data.packages = packages;
     } catch {
         return new Response('Invalid publication manifest', { status: 400 });
     }
@@ -94,10 +142,11 @@ export async function handlePublish(req: Request, suite: string, env: Bindings):
         } while (cursor && pending.size);
         if (pending.size) return new Response(`Missing file: ${pending.keys().next().value}`, { status: 409 });
     }
-    const committed = await bucket.put(releaseKey(suite), JSON.stringify({ release: data.release, manifest }), {
-        onlyIf: current ? { etagMatches: current.etag } : { etagDoesNotMatch: '*' },
-        httpMetadata: { contentType: 'application/json', cacheControl: 'no-store' },
-    });
+    const committed = await bucket.put(releaseKey(suite),
+        JSON.stringify({ release: data.release, manifest, packages: data.packages ?? [] }), {
+            onlyIf: current ? { etagMatches: current.etag } : { etagDoesNotMatch: '*' },
+            httpMetadata: { contentType: 'application/json', cacheControl: 'no-store' },
+        });
     return committed ? new Response('OK') : new Response('Concurrent publication; sync again', { status: 409 });
 }
 
