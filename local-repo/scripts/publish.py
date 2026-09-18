@@ -419,7 +419,7 @@ def prepare_snapshot(root, suite, release_id, packages, config, pool_debs, home,
 
         gz_path = arch_dir / 'Packages.gz'
         with gz_path.open('wb') as sink:
-            with gzip.GzipFile(fileobj=sink, mtime=0) as gz:
+            with gzip.GzipFile(fileobj=sink, mode='wb', mtime=0) as gz:
                 gz.write(packages_txt.encode())
 
         gz_digest = sha256(gz_path)
