@@ -45,9 +45,11 @@ describe('cache', () => {
         const env = { APT_KV: mockKV() } as any;
         await setCachedIndex(env, 'kali-rolling', 'amd64', { etag: 'e1', entries: [entry] });
         await setCachedIndex(env, 'kali-rolling', 'arm64', { etag: 'e2', entries: [entry] });
+        await setCachedIndex(env, 'kali-rolling', 'all', { etag: 'e3', entries: [entry] });
         await invalidate(env, 'kali-rolling');
         expect(await getCachedIndex(env, 'kali-rolling', 'amd64')).toBeNull();
         expect(await getCachedIndex(env, 'kali-rolling', 'arm64')).toBeNull();
+        expect(await getCachedIndex(env, 'kali-rolling', 'all')).toBeNull();
     });
 
     it('cache hit only when ETag matches current R2', async () => {

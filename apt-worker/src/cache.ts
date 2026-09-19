@@ -1,7 +1,7 @@
 import type { PackageEntry, Bindings } from './env';
 
 const TTL_SECONDS = 300;
-const ARCHS = ['amd64', 'arm64'] as const;
+const ARCHS = ['amd64', 'arm64', 'all'] as const;
 type Arch = typeof ARCHS[number];
 
 export interface CachedIndex {

@@ -47,7 +47,7 @@ async function doSearch() {
     }
     loading.value = true;
     try {
-        results.value = await searchPackages(siteConfig.defaultSuite, 'amd64', query.value);
+        results.value = await searchPackages(siteConfig.defaultSuite, ['amd64', 'all'], query.value);
     } finally {
         loading.value = false;
     }

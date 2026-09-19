@@ -2,7 +2,7 @@ import { ref, watch, type Ref } from 'vue';
 import type { PackageEntry } from '../types';
 import { fetchIndex } from '../api/packages';
 
-export function usePackages(suite: Ref<string>, arch: Ref<string>) {
+export function usePackages(suite: Ref<string>, arch: Ref<string | string[]>) {
     const packages = ref<PackageEntry[]>([]);
     const loading = ref(false);
     const error = ref<Error | null>(null);

@@ -4,7 +4,7 @@ import { parsePackages } from './parser';
 import { validateSuite } from './shared/path';
 import { resolveIndexKey } from './releases';
 
-const ARCHS = ['amd64', 'arm64'] as const;
+const ARCHS = ['amd64', 'arm64', 'all'] as const;
 type Arch = typeof ARCHS[number];
 
 function jsonError(status: number, message: string): Response {

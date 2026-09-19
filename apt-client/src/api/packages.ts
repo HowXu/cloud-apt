@@ -1,4 +1,4 @@
-import type { IndexResponse, PackageEntry } from '../types';
+import type { PackageEntry } from '../types';
 
 const BASE = '';
 
@@ -8,22 +8,37 @@ async function parseIndex(r: Response): Promise<PackageEntry[]> {
     if (!ct.includes('application/json')) {
         throw new Error(`expected JSON, got "${ct || 'no content-type'}" (HTTP ${r.status})`);
     }
-    const json = (await r.json()) as IndexResponse;
+    const json = (await r.json()) as { packages?: PackageEntry[] };
     return json.packages ?? [];
 }
 
-export async function fetchIndex(suite: string, arch: string): Promise<PackageEntry[]> {
-    const r = await fetch(`${BASE}/api/index/${suite}/${arch}`);
-    return parseIndex(r);
+export async function fetchIndex(
+    suite: string,
+    arch: string | string[]
+): Promise<PackageEntry[]> {
+    const archs = Array.isArray(arch) ? arch : [arch];
+    const lists = await Promise.all(
+        archs.map((a) =>
+            fetch(`${BASE}/api/index/${suite}/${a}`).then(parseIndex)
+        )
+    );
+    return lists.flat();
 }
 
 export async function searchPackages(
     suite: string,
-    arch: string,
+    arch: string | string[],
     query: string
 ): Promise<PackageEntry[]> {
-    const r = await fetch(`${BASE}/api/index/${suite}/${arch}/search?q=${encodeURIComponent(query)}`);
-    return parseIndex(r);
+    const archs = Array.isArray(arch) ? arch : [arch];
+    const lists = await Promise.all(
+        archs.map((a) =>
+            fetch(
+                `${BASE}/api/index/${suite}/${a}/search?q=${encodeURIComponent(query)}`
+            ).then(parseIndex)
+        )
+    );
+    return lists.flat();
 }
 
 export function formatSize(bytes: number): string {

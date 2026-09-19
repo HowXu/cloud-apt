@@ -137,6 +137,29 @@ test('handleIndex returns JSON error envelope on invalid arch', async () => {
     expect(await r.json()).toEqual({ packages: [], error: 'Invalid arch' });
 });
 
+test('handleIndex serves the binary-all index for arch=all', async () => {
+    const allPackages = `Package: docs
+Version: 1.0
+Architecture: all
+Filename: pool/main/d/docs/docs_1.0_all.deb
+Size: 10
+Description: Architecture-independent docs
+
+`;
+    const env: any = {
+        APT_BUCKET: mockR2({
+            'dists/kali-rolling/main/binary-all/Packages.gz': allPackages,
+        }),
+        APT_KV: { get: vi.fn(async () => null), put: vi.fn(), delete: vi.fn() },
+    };
+    const r = await handleIndex('kali-rolling', 'all', env);
+    expect(r.status).toBe(200);
+    const json = await r.json() as any;
+    expect(json.packages).toHaveLength(1);
+    expect(json.packages[0].Package).toBe('docs');
+    expect(json.packages[0].Architecture).toBe('all');
+});
+
 test('handleSearch returns JSON error envelope on invalid suite', async () => {
     const env = {
         APT_BUCKET: { get: () => Promise.resolve(null) },
