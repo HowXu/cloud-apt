@@ -1,19 +1,19 @@
 <template>
-  <div class="max-w-1100px mx-auto p-8">
-    <header class="flex items-center mb-8 gap-3">
+  <div class="max-w-1100px mx-auto px-4 py-6 sm:px-8 sm:py-8">
+    <header class="flex items-center mb-6 sm:mb-8 gap-3">
       <img
         v-if="siteConfig.iconUrl"
         :src="siteConfig.iconUrl"
         :alt="siteConfig.iconAlt || ''"
         class="h-7 w-7"
       />
-      <h1 class="text-2xl">
+      <h1 class="text-xl sm:text-2xl">
         <router-link to="/" class="text-fg no-underline">{{ siteConfig.headerTitle }}</router-link>
       </h1>
     </header>
 
     <p class="text-muted"><router-link to="/" class="text-accent no-underline hover:underline">← home</router-link></p>
-    <h2 class="text-lg mt-4 mb-2">
+    <h2 class="text-base sm:text-lg mt-4 mb-2">
       {{ suite }} · {{ arch }} · {{ packages.length }} packages
     </h2>
 
