@@ -18,9 +18,9 @@ export interface SiteConfig {
 }
 
 export const siteConfig: SiteConfig = {
-    headerTitle: 'Cloud APT Repository',
+    headerTitle: "HowXu's Repository",
     headerTagline: '',
-    browserTabTitle: 'Cloud APT Repository',
+    browserTabTitle: "HowXu's Repository",
     iconUrl: 'https://q1.qlogo.cn/g?b=qq&nk=672252397&s=640',
     iconAlt: '',
     homepageIntroLines: [
