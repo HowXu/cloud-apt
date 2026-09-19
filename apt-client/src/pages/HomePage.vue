@@ -27,10 +27,10 @@
     <section class="mt-6 sm:mt-8">
       <h2 class="text-base sm:text-lg mb-3 sm:mb-4">Browse</h2>
       <router-link
-        :to="`/browse?suite=${siteConfig.defaultSuite}&arch=amd64`"
+        :to="`/browse?suite=${siteConfig.defaultSuite}`"
         class="inline-block px-4 py-2 bg-card border border-border rounded-md text-accent no-underline hover:bg-hover"
       >
-        {{ siteConfig.defaultSuite }} (amd64)
+        {{ siteConfig.defaultSuite }}
       </router-link>
     </section>
 

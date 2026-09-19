@@ -14,7 +14,7 @@
 
     <p class="text-muted"><router-link to="/" class="text-accent no-underline hover:underline">← home</router-link></p>
     <h2 class="text-base sm:text-lg mt-4 mb-2">
-      {{ suite }} · {{ arch }} · {{ packages.length }} packages
+      {{ suite }} · {{ archLabel }} · {{ packages.length }} packages
     </h2>
 
     <div v-if="loading" class="text-muted">Loading…</div>
@@ -35,7 +35,12 @@ import Footer from '../components/Footer.vue';
 
 const route = useRoute();
 const suite = computed(() => (route.query.suite as string) || siteConfig.defaultSuite);
-const arch = computed(() => (route.query.arch as string) || 'amd64');
+const arch = computed<string | string[]>(() => {
+    const a = route.query.arch as string | undefined;
+    if (a === 'amd64' || a === 'arm64' || a === 'all') return a;
+    return ['amd64', 'arm64', 'all'];
+});
+const archLabel = computed(() => Array.isArray(arch.value) ? 'all archs' : arch.value);
 
 const { packages, loading, error } = usePackages(suite, arch);
 </script>
