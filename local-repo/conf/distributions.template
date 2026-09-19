@@ -2,7 +2,7 @@ Origin: cloud-apt
 Label: Personal APT Repository
 Codename: kali-rolling
 Suite: kali-rolling
-Architectures: amd64 arm64
+Architectures: amd64 arm64 all
 Components: main
 Description: Kali Rolling builds
 
