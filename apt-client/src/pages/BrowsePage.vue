@@ -13,7 +13,24 @@
     </header>
 
     <p class="text-muted"><router-link to="/" class="text-accent no-underline hover:underline">← home</router-link></p>
-    <h2 class="text-base sm:text-lg mt-4 mb-2">
+
+    <nav class="flex flex-wrap gap-2 mt-4 mb-2">
+      <router-link
+        v-for="t in tabs"
+        :key="t.label"
+        :to="t.query ? `/browse?suite=${suite}&arch=${t.query}` : `/browse?suite=${suite}`"
+        :class="[
+          'px-3 py-1.5 rounded-md border text-sm no-underline',
+          activeArch === t.query
+            ? 'bg-accent border-accent text-bg'
+            : 'bg-card border-border text-accent hover:bg-hover'
+        ]"
+      >
+        {{ t.label }}
+      </router-link>
+    </nav>
+
+    <h2 class="text-base sm:text-lg mt-2 mb-2">
       {{ suite }} · {{ archLabel }} · {{ packages.length }} packages
     </h2>
 
@@ -33,11 +50,18 @@ import { usePackages } from '../composables/usePackages';
 import PackageTable from '../components/PackageTable.vue';
 import Footer from '../components/Footer.vue';
 
+const tabs = [
+  { label: 'all archs', query: '' },
+  { label: 'amd64', query: 'amd64' },
+  { label: 'arm64', query: 'arm64' },
+  { label: 'all', query: 'all' },
+];
+
 const route = useRoute();
 const suite = computed(() => (route.query.suite as string) || siteConfig.defaultSuite);
+const activeArch = computed(() => (route.query.arch as string) || '');
 const arch = computed<string | string[]>(() => {
-    const a = route.query.arch as string | undefined;
-    if (a === 'amd64' || a === 'arm64' || a === 'all') return a;
+    if (activeArch.value === 'amd64' || activeArch.value === 'arm64' || activeArch.value === 'all') return activeArch.value;
     return ['amd64', 'arm64', 'all'];
 });
 const archLabel = computed(() => Array.isArray(arch.value) ? 'all archs' : arch.value);
