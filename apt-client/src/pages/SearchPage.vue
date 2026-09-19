@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-1100px mx-auto p-8">
+  <div class="max-w-1280px mx-auto p-8">
     <header class="flex items-center mb-8 gap-3">
       <img
         v-if="siteConfig.iconUrl"

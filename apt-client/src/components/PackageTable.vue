@@ -62,7 +62,7 @@ defineProps<{ packages: PackageEntry[] }>();
 
 @media (min-width: 768px) {
   .entry-row {
-    grid-template-columns: minmax(0, 1fr) 9rem 5rem 6rem auto;
+    grid-template-columns: minmax(0, 1fr) auto 5rem 6rem auto;
   }
 }
 

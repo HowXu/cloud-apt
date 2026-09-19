@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-1100px mx-auto px-4 py-6 sm:px-8 sm:py-8">
+  <div class="max-w-1280px mx-auto px-4 py-6 sm:px-8 sm:py-8">
     <header class="flex flex-wrap items-baseline justify-between mb-6 sm:mb-8 gap-2 sm:gap-3">
       <div class="flex items-baseline gap-3 min-w-0">
         <img
